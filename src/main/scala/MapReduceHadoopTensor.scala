@@ -6,21 +6,42 @@ import org.apache.hadoop.mapred.*
 
 import java.io.IOException
 import java.util
+import java.util.StringTokenizer
+import scala.collection.mutable.HashMap
 import scala.jdk.CollectionConverters.*
+
+import com.knuddels.jtokkit.Encodings
+import com.knuddels.jtokkit.api.EncodingRegistry
+import com.knuddels.jtokkit.api.Encoding
+import com.knuddels.jtokkit.api.EncodingType
+import com.knuddels.jtokkit.api.IntArrayList
 
 
 object MapReduceTensor:
   class Map extends MapReduceBase with Mapper[LongWritable, Text, Text, IntWritable]:
-    private final val one = new IntWritable(1)
-    private val word = new Text()
+
+    var encoding: Encoding = _
+
+    override def configure(job: JobConf): Unit =
+      val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
+      encoding = registry.getEncoding(EncodingType.CL100K_BASE) // Using CL100K_BASE for encoding
 
     @throws[IOException]
     override def map(key: LongWritable, value: Text, output: OutputCollector[Text, IntWritable], reporter: Reporter): Unit =
-      val line: String = value.toString
-      line.split(" ").foreach { token =>
-//        word.set(token) TODO: New mapping for producing tensor
-//        output.collect(word, one)
+      val line = value.toString
+
+      val encodedTokens: IntArrayList = encoding.encode(line)
+      val tokens: Array[String] = encoding.decode(encodedTokens).split(" ")
+
+      for (i <- 0 until encodedTokens.size()) {
+        val tokenId = encodedTokens.get(i) // Token ID
+        val token = tokens(i)
+
+        // Emit the token string and its corresponding token ID
+        output.collect(new Text(token), new IntWritable(tokenId))
       }
+
+
 
   class Reduce extends MapReduceBase with Reducer[Text, IntWritable, Text, IntWritable]:
     override def reduce(key: Text, values: util.Iterator[IntWritable], output: OutputCollector[Text, IntWritable], reporter: Reporter): Unit =

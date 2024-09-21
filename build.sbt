@@ -12,3 +12,7 @@ libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.4"
 // https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-mapreduce-client-core
 libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "3.3.4"
 libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-jobclient" % "3.3.4"
+
+libraryDependencies += "com.knuddels" % "jtokkit" % "1.1.0" // Adjust version as needed
+
+libraryDependencies += "it.unimi.dsi" % "fastutil" % "8.5.8"
