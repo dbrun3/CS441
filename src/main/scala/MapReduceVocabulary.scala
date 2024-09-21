@@ -9,6 +9,7 @@ import java.util
 import java.util.StringTokenizer
 import scala.collection.mutable.HashMap
 import scala.jdk.CollectionConverters.*
+import scala.compiletime.uninitialized
 
 import com.knuddels.jtokkit.Encodings
 import com.knuddels.jtokkit.api.EncodingRegistry
@@ -17,10 +18,10 @@ import com.knuddels.jtokkit.api.EncodingType
 import com.knuddels.jtokkit.api.IntArrayList
 
 
-object MapReduceTensor:
+object MapReduceVocabulary:
   class Map extends MapReduceBase with Mapper[LongWritable, Text, Text, IntWritable]:
 
-    var encoding: Encoding = _
+    private var encoding: Encoding = uninitialized
 
     override def configure(job: JobConf): Unit =
       val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
