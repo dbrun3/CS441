@@ -15,4 +15,5 @@ libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-jobclient"
 
 libraryDependencies += "com.knuddels" % "jtokkit" % "1.1.0" // Adjust version as needed
 
-libraryDependencies += "it.unimi.dsi" % "fastutil" % "8.5.8"
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-beta7"
+libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-beta7"
