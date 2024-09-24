@@ -1,10 +1,13 @@
 import com.knuddels.jtokkit.Encodings
 import com.knuddels.jtokkit.api.{Encoding, EncodingRegistry, EncodingType, IntArrayList}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.{LongWritable, Text, Writable}
+import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat, TextInputFormat}
+import org.apache.hadoop.mapreduce.lib.output.{FileOutputFormat, TextOutputFormat}
 import org.apache.hadoop.mapreduce.{Job, Mapper, Reducer}
 
-import java.io.IOException
+import java.io.{File, IOException}
 import scala.compiletime.uninitialized
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.api.ndarray.INDArray
@@ -79,22 +82,13 @@ object MapReduceTensor:
 
       // Retrieve the line from input
       val line = value.toString
-
-      // Encode the input line into token indices using JTokkit
       val encodedTokens: IntArrayList = encoding.encode(line)
-
-      // Convert IntArrayList to an Array[Int] to be used with Nd4j
       val tokenIndices: Array[Int] = encodedTokens.toArray
 
       // Create an INDArray for the input features
       val features: INDArray = Nd4j.create(tokenIndices, Array(tokenIndices.length))
-
-      // Retrieve the number of classes from the configuration for label creation
       val numClasses = context.getConfiguration.get("numClasses").toInt
-
-      // For simplicity, assume that the label is the last token in the input (this can be adjusted based on your format)
       val label = tokenIndices.last // assuming label is embedded as the last token
-
       val labels: INDArray = Nd4j.create(numClasses) // create with the number of classes
       labels.putScalar(label, 1.0) // one-hot encode the label at the given index
 
@@ -104,12 +98,48 @@ object MapReduceTensor:
       // Emit a status update or other information if needed
       context.write(new Text("Trained on record: " + key), new Text("Model updated"))
 
+    @throws[IOException]
+    @throws[InterruptedException]
+    protected override def cleanup(context: Mapper[LongWritable, Text, Text, Text]#Context): Unit =
+      // Save the trained model at the end of the Map phase
+      val modelPath = context.getConfiguration.get("modelPath")
+      model.save(new File(modelPath))
 
 
-  @main def runMapReduceTensor(inputPath: String, outputPath: String) =
+  class EmbeddingReducer extends Reducer[LongWritable, Text, Text, Text]:
+    val idk = 0
+
+
+  @main def runMapReduceTensor(inputPath: String, outputPath: String, modelPath: String) = {
     val conf = new Configuration()
     conf.set("vocabSize", "10000")
     conf.set("embeddingSize", "128")
     conf.set("numClasses", "10")
+    conf.set("modelPath", modelPath)
 
     val job = Job.getInstance(conf, "Token Embedding Training")
+    job.setJarByClass(classOf[EmbeddingMapper]) // Assuming EmbeddingMapper is your custom mapper
+
+    // Set the Mapper and Reducer classes
+    job.setMapperClass(classOf[EmbeddingMapper]) // Your custom mapper class
+    job.setReducerClass(classOf[EmbeddingReducer]) // Your custom reducer class
+
+    // Set output key/value classes
+    job.setOutputKeyClass(classOf[Text]) // Adjust types as needed
+    job.setOutputValueClass(classOf[Text]) // Adjust types as needed
+
+    // Set input/output format classes (e.g., TextInputFormat)
+    job.setInputFormatClass(classOf[TextInputFormat]) // Adjust to your format
+    job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]]) // Adjust to your format
+
+    // Set input and output paths
+    FileInputFormat.addInputPath(job, new Path(inputPath))
+    FileOutputFormat.setOutputPath(job, new Path(outputPath))
+
+    // Wait for job completion
+    if (job.waitForCompletion(true)) {
+      println("MapReduce job completed successfully.")
+    } else {
+      println("MapReduce job failed.")
+    }
+  }

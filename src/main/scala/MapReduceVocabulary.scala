@@ -32,16 +32,15 @@ object MapReduceVocabulary:
     override def map(key: LongWritable, value: Text, output: OutputCollector[Text, IntWritable], reporter: Reporter): Unit =
       val line = value.toString
 
-      val encodedTokens: IntArrayList = encoding.encode(line)
+      val encodedTokens: Array[Int] = encoding.encode(line).toArray
 
-      for (i <- 0 until encodedTokens.size()) {
-        val tokenId = encodedTokens.get(i) // Token ID
+      encodedTokens.foreach(tokenId => {
         val tokenIdList: IntArrayList = new IntArrayList()
         tokenIdList.add(tokenId)
         val token = encoding.decode(tokenIdList)
         word.set(token + "\t" + tokenId)
         output.collect(word, one)
-      }
+      })
 
 
 
