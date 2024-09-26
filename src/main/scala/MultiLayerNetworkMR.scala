@@ -1,8 +1,8 @@
-//import com.knuddels.jtokkit.Encodings
-//import com.knuddels.jtokkit.api.EncodingRegistry
-//import com.knuddels.jtokkit.api.Encoding
-//import com.knuddels.jtokkit.api.EncodingType
-//import com.knuddels.jtokkit.api.IntArrayList
+import com.knuddels.jtokkit.Encodings
+import com.knuddels.jtokkit.api.EncodingRegistry
+import com.knuddels.jtokkit.api.Encoding
+import com.knuddels.jtokkit.api.EncodingType
+import com.knuddels.jtokkit.api.IntArrayList
 import org.apache.hadoop.mapreduce.*
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.conf.*
@@ -22,7 +22,7 @@ import java.io.IOException
 import scala.jdk.CollectionConverters.*
 
 // Mapper class
-class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
+class MLNMapper extends Mapper[LongWritable, Text, Text, Text]:
 
   private val word = new Text()
   private val arr = new Text()
@@ -57,14 +57,14 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
       val tokenId = vocab.wordFor(token).getIndex // Get the token ID (index) of the word
 
       // println(s"Word: $token, Token ID: $tokenId, Word Vector: ${wordVector.mkString(", ")}")
-      
+
       word.set(token)
       arr.set(wordVector.mkString(","))
       context.write(word, arr)
     }
 
 // Reducer class
-class W2VReducer extends Reducer[Text, Text, Text, Text]:
+class MLNReducer extends Reducer[Text, Text, Text, Text]:
 
   @throws[IOException]
   @throws[InterruptedException]
@@ -103,7 +103,7 @@ class W2VReducer extends Reducer[Text, Text, Text, Text]:
     context.write(key, new Text("[" + averagedVectorString + "]"))
 
 // Driver code
-object Word2VecMR:
+object MLNMR:
   def main(args: Array[String]): Unit =
 
     try {
@@ -127,8 +127,8 @@ object Word2VecMR:
     conf.set("mapreduce.map.log.level", "DEBUG")
     conf.set("mapreduce.reduce.log.level", "DEBUG")
 
-    job1.setMapperClass(classOf[W2VMapper])
-    job1.setReducerClass(classOf[W2VReducer])
+    job1.setMapperClass(classOf[MLNMapper])
+    job1.setReducerClass(classOf[MLNReducer])
 
     job1.setMapOutputKeyClass(classOf[Text])
     job1.setMapOutputValueClass(classOf[Text])
