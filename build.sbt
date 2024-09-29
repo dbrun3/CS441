@@ -5,12 +5,12 @@ ThisBuild / scalaVersion := "3.5.0"
 lazy val root = (project in file("."))
   .settings(
     name := "Exercises441",
-      assembly / mainClass := Some("Word2VecMR")
+      assembly / mainClass := Some("Driver")
   )
 
 lazy val utils = (project in file("utils"))
   .settings(
-    assembly / assemblyJarName := "Word2VecMR.jar",
+    assembly / assemblyJarName := "Driver.jar",
     // more settings here ...
   )
 
