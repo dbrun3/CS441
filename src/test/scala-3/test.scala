@@ -1,6 +1,6 @@
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
+import java.io.File
 
 class Word2VecMRTests extends AnyFlatSpec with Matchers {
 
@@ -29,7 +29,7 @@ class Word2VecMRTests extends AnyFlatSpec with Matchers {
     iterator.hasMoreSequences shouldBe false
   }
 
-  // Helper method to compute cosine similarity
+  // The method to compute cosine similarity from CosineSimMR
   def cosineSimilarity(vecA: Array[Double], vecB: Array[Double]): Double =
     val dotProduct = vecA.zip(vecB).map { case (a, b) => a * b }.sum
     val magnitudeA = math.sqrt(vecA.map(a => a * a).sum)
@@ -45,5 +45,53 @@ class Word2VecMRTests extends AnyFlatSpec with Matchers {
 
     // Manually calculated cosine similarity for these vectors
     similarity shouldEqual 0.9746318461970762 +- 0.0001
+  }
+
+  "Word2VecMR" should "delete the output folder, run, and create _SUCCESS file" in {
+    val outputFolder = new File("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output")
+
+    // Delete the output folder if it exists
+    if (outputFolder.exists()) {
+      outputFolder.deleteRecursively()
+    }
+
+    // Run the Word2VecMR job
+    Word2VecMR.run("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input", "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output")
+
+    // Check if the _SUCCESS file is created
+    val successFile = new File(outputFolder.getAbsolutePath + "/_SUCCESS")
+    successFile.exists() shouldEqual true
+  }
+
+  "CosineSimMR" should "check for the output folder, delete pair folder, run, and create _SUCCESS file" in {
+    val outputFolder = new File("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output")
+    val pairFolder = new File("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/pair")
+
+    // Check if the output folder exists, fail if not
+    outputFolder.exists() shouldEqual true
+
+    // Delete the pair folder if it exists
+    if (pairFolder.exists()) {
+      pairFolder.deleteRecursively()
+    }
+
+    // Run the CosineSimMR job
+    CosineSimMR.run("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output", "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/pair")
+
+
+
+    // Check if the _SUCCESS file is created
+    val successFile = new File(pairFolder.getAbsolutePath + "/_SUCCESS")
+    successFile.exists() shouldEqual true
+  }
+
+  // Helper method to recursively delete directories
+  implicit class RichFile(file: File) {
+    def deleteRecursively(): Unit = {
+      if (file.isDirectory) {
+        file.listFiles().foreach(_.deleteRecursively())
+      }
+      file.delete()
+    }
   }
 }

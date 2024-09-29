@@ -126,7 +126,7 @@ object CosineSimMR:
     // Block until the job is done
     if (job1.waitForCompletion(true)) {
       println("Word2Vec Job completed successfully")
-      System.exit(0)
+      // System.exit(0)
     } else {
       println("Job failed")
       System.exit(1)
