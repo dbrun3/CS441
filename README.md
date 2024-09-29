@@ -1,7 +1,6 @@
 # CS441 - Dylan Brunelle
 
-My 441 repo. 
-
+### HW1
 HW1 is in the 'hw1' branch. To try it yourself, clone the repository and open in in Intellij. Set your sbt shell to jre version 8/11.
 You might be able to go higher, but 23 will for sure throw errors. 
 For testing, the last two test cases will require you to set your own input and output directories in the case itself.
