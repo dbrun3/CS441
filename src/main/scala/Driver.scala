@@ -2,6 +2,7 @@ object Driver:
   def main(args: Array[String]): Unit =
     if (args.length < 3) {
       println("Usage: Driver <ClassName> <Input> <Output>")
+      println(args.length)
       sys.exit(1) // Exits the program with a non-zero status to indicate an error
     }
 

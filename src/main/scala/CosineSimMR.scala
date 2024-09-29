@@ -13,6 +13,10 @@ import org.nd4j.linalg.factory.Nd4j
 import java.io.IOException
 import scala.jdk.CollectionConverters.*
 
+//Mapper
+// The Mapper class processes input text, where each line contains a word and its associated embedding vector.
+// It extracts the word and its embedding, and emits them as key-value pairs, where the key is a constant (e.g., "ALL")
+// and the value is the word along with its embedding in a tab-separated format.
 class WordEmbeddingMapper extends Mapper[LongWritable, Text, Text, Text]:
 
   @throws[IOException]
@@ -29,6 +33,11 @@ class WordEmbeddingMapper extends Mapper[LongWritable, Text, Text, Text]:
     // Emit word as key and its embedding as value
     context.write(new Text("ALL"), new Text(word + "\t" + embeddingString))
 
+
+//Reducer
+// The Reducer class gathers all words and their embeddings from the Mapper output. It calculates the cosine similarity
+// between each word's embedding and every other word's embedding to find the closest neighboring word based on similarity.
+// The final output is the word along with its closest neighbor and the similarity score between their embeddings.
 class CosineSimilarityReducer extends Reducer[Text, Text, Text, Text]:
 
   @throws[IOException]

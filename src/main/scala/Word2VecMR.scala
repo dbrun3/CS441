@@ -64,6 +64,10 @@ class TokenizedSequenceIterator(tokensList: List[Array[Int]]) extends SequenceIt
     currentIndex = 0
 
 // Mapper class
+// The Mapper class reads input text line by line, encodes the text using BPE (byte pair encoding),
+// and splits it into sentences based on periods. It then processes each sentence through a Word2Vec model
+// to generate word embeddings. The embeddings and associated tokens are emitted as key-value pairs,
+// where the key is the decoded word and the value is the corresponding word vector.
 class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
 
   private val wordKey = new Text()
@@ -111,6 +115,10 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
     }
 
 // Reducer class
+// The Reducer class collects the word embeddings emitted by the Mapper, aggregates them by summing
+// the vectors of the same token, and computes the average vector for each token. The final output
+// is the token with its average embedding vector, which represents the word's meaning based on its
+// usage in the text.
 class W2VReducer extends Reducer[Text, Text, Text, Text]:
 
   private val out = Text()

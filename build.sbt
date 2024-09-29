@@ -14,6 +14,8 @@ lazy val utils = (project in file("utils"))
     // more settings here ...
   )
 
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
+
 // https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common
 libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.4"
 // https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-mapreduce-client-core
