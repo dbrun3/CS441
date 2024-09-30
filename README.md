@@ -8,4 +8,4 @@ For testing, the last two test cases will require you to set your own input and 
 
 For running, sbt run will run the default Driver program which takes "operation" "inputfile" "outputfile" args. Operations are "Word2Vec" "CosineSim" and "Tokenization"
 
-Video report: https://www.youtube.com/watch?v=__O1X9f8VuI
+Video report: https://www.youtube.com/watch?v=__O1X9f8VuI (Output contains incorrect frequencies, see "output" folder in hw1 branch with updated, accurate output)
