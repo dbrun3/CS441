@@ -108,9 +108,10 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
       val decodedWord = encoding.decode(decodedValue) // Decode to original subword
 
       val wordVector = vec.getWordVector(word) // Get the embedding vector for the word
+      val freq = vec.getVocab.wordFrequency(word)
 
       wordKey.set("word: " + decodedWord + "\tid: " + tokenId)
-      arr.set(wordVector.mkString(","))
+      arr.set(freq + "\t" + wordVector.mkString(","))
       context.write(wordKey, arr)
     }
 
@@ -132,7 +133,9 @@ class W2VReducer extends Reducer[Text, Text, Text, Text]:
     // Iterate over all values (embedding vectors for the given key)
     for (value <- values.asScala) {
       // Convert the comma-separated string to an array of floats
-      val currentVector: Array[Float] = value.toString.stripPrefix("[").stripSuffix("]").split(",").map(_.toFloat)
+      val parts: Array[String] = value.toString.split("\t")
+      val freq: Int = parts(0).toInt
+      val currentVector: Array[Float] = parts(1).stripPrefix("[").stripSuffix("]").split(",").map(_.toFloat)
 
       // Initialize sumVector if this is the first vector
       if (sumVector == null) {
@@ -141,9 +144,9 @@ class W2VReducer extends Reducer[Text, Text, Text, Text]:
 
       // Add the current vector to the sumVector element-wise
       for (i <- currentVector.indices) {
-        sumVector(i) += currentVector(i)
+        sumVector(i) += currentVector(i) * freq
       }
-      count += 1 // Track the number of vectors
+      count += freq // Track the number of vectors
     }
 
     // Compute the average vector
