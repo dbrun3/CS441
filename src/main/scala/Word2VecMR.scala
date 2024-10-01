@@ -3,6 +3,7 @@ import com.knuddels.jtokkit.api.EncodingRegistry
 import com.knuddels.jtokkit.api.Encoding
 import com.knuddels.jtokkit.api.EncodingType
 import com.knuddels.jtokkit.api.IntArrayList
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.mapreduce.*
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.conf.*
@@ -19,7 +20,9 @@ import org.deeplearning4j.models.sequencevectors.sequence.Sequence
 import org.nd4j.linalg.factory.Nd4j
 
 import java.io.IOException
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
+
+import org.slf4j.LoggerFactory
 
 // Function for splitting encoded arrays by periods
 def splitArrayOnToken(arr: Array[Int], separator: Int): List[Array[Int]] =
@@ -77,6 +80,13 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
   private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
   private val encoding: Encoding = registry.getEncoding(EncodingType.CL100K_BASE) // Using CL100K_BASE for encoding
 
+  private val config: Config = ConfigFactory.load()
+  private val minWordFrequency: Int = config.getInt("word2vec.minWordFrequency")
+  private val layerSize: Int = config.getInt("word2vec.layerSize")
+  private val seed: Long = config.getLong("word2vec.seed")
+  private val windowSize: Int = config.getInt("word2vec.windowSize")
+  private val epochs: Int = config.getInt("word2vec.epochs")
+
   @throws[IOException]
   @throws[InterruptedException]
   override def map(key: LongWritable, value: Text, context: Mapper[LongWritable, Text, Text, Text]#Context): Unit =
@@ -88,11 +98,11 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
     val sequenceIterator = new TokenizedSequenceIterator(encodedSentences)
 
     val vec = new Word2Vec.Builder()
-      .minWordFrequency(5)
-      .layerSize(100)
-      .seed(42)
-      .windowSize(8)
-      .epochs(5)
+      .minWordFrequency(minWordFrequency)
+      .layerSize(layerSize)
+      .seed(seed)
+      .windowSize(windowSize)
+      .epochs(epochs)
       .iterate(sequenceIterator)
       .build()
 
@@ -166,13 +176,17 @@ class W2VReducer extends Reducer[Text, Text, Text, Text]:
 
 // Driver code
 object Word2VecMR:
+
+  private val logger = LoggerFactory.getLogger(this.getClass)
+  
   def run(input: String, output: String): Unit =
 
     try {
-      println(Nd4j.getBackend)
-      println(Nd4j.create(2, 2)) // Create a simple matrix to ensure backend is working
+      logger.info("Creating matrix to test backend working")
+      logger.info(Nd4j.getBackend.toString)
+      logger.info(Nd4j.create(2, 2).toString()) // Create a simple matrix to ensure backend is working
     } catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception => logger.error(e.printStackTrace().toString)
     }
 
     val conf = new Configuration
@@ -196,16 +210,16 @@ object Word2VecMR:
     FileInputFormat.addInputPath(job1, new Path(input))
     FileOutputFormat.setOutputPath(job1, new Path(output))
 
-    println("Job started...")
+    logger.info("Word2Vec Job started...")
 
     // Start the job and wait for completion
     val success1 = job1.submit() // Start job asynchronously
 
     // Block until the job is done
     if (job1.waitForCompletion(true)) {
-      println("Word2Vec Job completed successfully")
+      logger.info("Word2Vec Job completed successfully")
       // System.exit(0)
     } else {
-      println("Job failed")
+      logger.info("Job failed")
       System.exit(1)
     }

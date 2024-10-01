@@ -13,6 +13,9 @@ import org.nd4j.linalg.factory.Nd4j
 import java.io.IOException
 import scala.jdk.CollectionConverters.*
 
+import org.slf4j.LoggerFactory
+
+
 //Mapper
 // The Mapper class processes input text, where each line contains a word and its associated embedding vector.
 // It extracts the word and its embedding, and emits them as key-value pairs, where the key is a constant (e.g., "ALL")
@@ -88,14 +91,10 @@ class CosineSimilarityReducer extends Reducer[Text, Text, Text, Text]:
     dotProduct / (magnitudeA * magnitudeB)
 
 object CosineSimMR:
-  def run(input: String, output: String): Unit =
 
-    try {
-      println(Nd4j.getBackend)
-      println(Nd4j.create(2, 2)) // Create a simple matrix to ensure backend is working
-    } catch {
-      case e: Exception => e.printStackTrace()
-    }
+  private val logger = LoggerFactory.getLogger(this.getClass)
+
+  def run(input: String, output: String): Unit =
 
     val conf = new Configuration
 
@@ -118,16 +117,16 @@ object CosineSimMR:
     FileInputFormat.addInputPath(job1, new Path(input))
     FileOutputFormat.setOutputPath(job1, new Path(output))
 
-    println("Job started...")
+    logger.info("Cosine Job started...")
 
     // Start the job and wait for completion
     val success1 = job1.submit() // Start job asynchronously
 
     // Block until the job is done
     if (job1.waitForCompletion(true)) {
-      println("Word2Vec Job completed successfully")
+      logger.info("Cosine Job completed successfully")
       // System.exit(0)
     } else {
-      println("Job failed")
+      logger.info("Job failed")
       System.exit(1)
     }
