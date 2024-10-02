@@ -100,7 +100,6 @@ object CosineSimMR:
 
     val job1 = Job.getInstance(conf, "cosinesim")
     job1.setJarByClass(CosineSimMR.getClass)
-    job1.setNumReduceTasks(1)  // Adjust the number of reducers
 
     conf.set("mapreduce.map.log.level", "DEBUG")
     conf.set("mapreduce.reduce.log.level", "DEBUG")

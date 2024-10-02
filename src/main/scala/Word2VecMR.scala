@@ -193,7 +193,6 @@ object Word2VecMR:
 
     val job1 = Job.getInstance(conf, "word2vec")
     job1.setJarByClass(Word2VecMR.getClass)
-    job1.setNumReduceTasks(1)  // Adjust the number of reducers
 
     conf.set("mapreduce.map.log.level", "DEBUG")
     conf.set("mapreduce.reduce.log.level", "DEBUG")
