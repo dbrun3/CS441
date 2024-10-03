@@ -5,7 +5,7 @@ import com.knuddels.jtokkit.api.EncodingType
 import com.knuddels.jtokkit.api.IntArrayList
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.mapreduce.*
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.conf.*
 import org.apache.hadoop.io.*
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
@@ -18,9 +18,11 @@ import org.deeplearning4j.models.word2vec.{VocabWord, Word2Vec}
 import org.deeplearning4j.models.sequencevectors.sequence
 import org.deeplearning4j.models.sequencevectors.sequence.Sequence
 
-import java.io.{File, IOException}
+import java.io.{File, IOException, InputStream}
 import scala.jdk.CollectionConverters.*
 import org.slf4j.LoggerFactory
+
+import scala.io.Source
 
 // Function for splitting encoded arrays by periods
 def splitArrayOnToken(arr: Array[Int], separator: Int): List[Array[Int]] =
@@ -94,7 +96,20 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
       throw new IllegalArgumentException("Config file path is not set in the configuration.")
     }
 
-    val config: Config = ConfigFactory.parseFile(new File(configFilePath))
+    // Check if the path contains "s3" and handle accordingly
+    val fs: FileSystem = if (configFilePath.contains("s3")) {
+      FileSystem.get(new java.net.URI(configFilePath), conf)
+    } else {
+      FileSystem.getLocal(conf)
+    }
+
+    val inputStream: InputStream = fs.open(new Path(configFilePath))
+    val fileContent: String = Source.fromInputStream(inputStream).mkString
+    inputStream.close()
+
+    // Parse the configuration using ConfigFactory
+    val config: Config = ConfigFactory.parseString(fileContent)
+
     val minWordFrequency: Int = config.getInt("word2vec.minWordFrequency")
     val layerSize: Int = config.getInt("word2vec.layerSize")
     val seed: Long = config.getLong("word2vec.seed")
