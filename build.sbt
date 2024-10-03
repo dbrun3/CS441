@@ -1,6 +1,6 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.5.0"
+ThisBuild / scalaVersion := "2.12.18"
 
 lazy val root = (project in file("."))
   .settings(
@@ -23,18 +23,18 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.36"             // SLF4J API
 )
 
-// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common
-libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.4"
-// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-mapreduce-client-core
-libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "3.3.4"
-libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-jobclient" % "3.3.4"
-
 libraryDependencies += "com.knuddels" % "jtokkit" % "1.1.0" // Adjust version as needed
 
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M1.1"
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M1.1"
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M2.1"
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M2.1"
+libraryDependencies += "org.deeplearning4j" % "dl4j-spark3_2.12" % "1.0.0-M2"
+libraryDependencies += "org.deeplearning4j" % "dl4j-spark-parameterserver_2.12" % "1.0.0-M2.1"
 
-libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M1.1"
+libraryDependencies += "org.apache.spark" % "spark-core_2.12" % "3.5.3"
+libraryDependencies += "org.apache.spark" % "spark-mllib_2.12" % "3.5.3"
+
+
+libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
 
 libraryDependencies ++= Seq(
   "org.bytedeco" % "openblas" % "0.3.21-1.5.8" classifier "linux-x86_64",
