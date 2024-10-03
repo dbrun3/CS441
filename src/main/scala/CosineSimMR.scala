@@ -7,9 +7,6 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
 import org.apache.hadoop.io.{LongWritable, Text}
 import org.apache.hadoop.mapreduce.{Job, Mapper, Reducer}
 import org.apache.hadoop.conf.Configuration
-
-import org.nd4j.linalg.factory.Nd4j
-
 import java.io.IOException
 import scala.jdk.CollectionConverters.*
 

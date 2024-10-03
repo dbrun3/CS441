@@ -56,7 +56,7 @@ class Word2VecMRTests extends AnyFlatSpec with Matchers {
     }
 
     // Run the Word2VecMR job
-    Word2VecMR.run("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input", "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output")
+    Word2VecMR.run("/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input", "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/output", "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/application.conf")
 
     // Check if the _SUCCESS file is created
     val successFile = new File(outputFolder.getAbsolutePath + "/_SUCCESS")

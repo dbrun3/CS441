@@ -9,9 +9,15 @@ object Driver:
     val className = args(0)
     val inputPath = args(1)
     val outputPath = args(2)
+    
+    
 
     if(className == "Word2Vec") {
-      Word2VecMR.run(inputPath, outputPath)
+      if(args.length < 4) {
+        println("Usage: Word2Vec <ClassName> <Input> <Output> <Conf>")
+        println(args.length)
+      }
+      Word2VecMR.run(inputPath, outputPath, args(3))
     }
     else if(className == "CosineSim") {
       CosineSimMR.run(inputPath, outputPath)

@@ -17,11 +17,9 @@ import org.deeplearning4j.models.sequencevectors.interfaces.SequenceIterator
 import org.deeplearning4j.models.word2vec.{VocabWord, Word2Vec}
 import org.deeplearning4j.models.sequencevectors.sequence
 import org.deeplearning4j.models.sequencevectors.sequence.Sequence
-import org.nd4j.linalg.factory.Nd4j
 
-import java.io.IOException
+import java.io.{File, IOException}
 import scala.jdk.CollectionConverters.*
-
 import org.slf4j.LoggerFactory
 
 // Function for splitting encoded arrays by periods
@@ -80,13 +78,6 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
   private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
   private val encoding: Encoding = registry.getEncoding(EncodingType.CL100K_BASE) // Using CL100K_BASE for encoding
 
-  private val config: Config = ConfigFactory.load()
-  private val minWordFrequency: Int = config.getInt("word2vec.minWordFrequency")
-  private val layerSize: Int = config.getInt("word2vec.layerSize")
-  private val seed: Long = config.getLong("word2vec.seed")
-  private val windowSize: Int = config.getInt("word2vec.windowSize")
-  private val epochs: Int = config.getInt("word2vec.epochs")
-
   @throws[IOException]
   @throws[InterruptedException]
   override def map(key: LongWritable, value: Text, context: Mapper[LongWritable, Text, Text, Text]#Context): Unit =
@@ -96,6 +87,19 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
     val encodedSentences: List[Array[Int]] = splitArrayOnToken(encodedTokens, 13) //BPE encoding for period
 
     val sequenceIterator = new TokenizedSequenceIterator(encodedSentences)
+
+    val conf: Configuration = context.getConfiguration
+    val configFilePath: String = conf.get("word2vecConf")
+    if (configFilePath == null) {
+      throw new IllegalArgumentException("Config file path is not set in the configuration.")
+    }
+
+    val config: Config = ConfigFactory.parseFile(new File(configFilePath))
+    val minWordFrequency: Int = config.getInt("word2vec.minWordFrequency")
+    val layerSize: Int = config.getInt("word2vec.layerSize")
+    val seed: Long = config.getLong("word2vec.seed")
+    val windowSize: Int = config.getInt("word2vec.windowSize")
+    val epochs: Int = config.getInt("word2vec.epochs")
 
     val vec = new Word2Vec.Builder()
       .minWordFrequency(minWordFrequency)
@@ -178,24 +182,17 @@ class W2VReducer extends Reducer[Text, Text, Text, Text]:
 object Word2VecMR:
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  
-  def run(input: String, output: String): Unit =
 
-    try {
-      logger.info("Creating matrix to test backend working")
-      logger.info(Nd4j.getBackend.toString)
-      logger.info(Nd4j.create(2, 2).toString()) // Create a simple matrix to ensure backend is working
-    } catch {
-      case e: Exception => logger.error(e.printStackTrace().toString)
-    }
+  def run(input: String, output: String, confFilePath: String): Unit =
 
     val conf = new Configuration
 
-    val job1 = Job.getInstance(conf, "word2vec")
-    job1.setJarByClass(Word2VecMR.getClass)
-
     conf.set("mapreduce.map.log.level", "DEBUG")
     conf.set("mapreduce.reduce.log.level", "DEBUG")
+    conf.set("word2vecConf", confFilePath)
+
+    val job1 = Job.getInstance(conf, "word2vec")
+    job1.setJarByClass(Word2VecMR.getClass)
 
     job1.setMapperClass(classOf[W2VMapper])
     job1.setReducerClass(classOf[W2VReducer])

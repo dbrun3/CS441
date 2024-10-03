@@ -36,10 +36,10 @@ libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M1.1
 
 libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M1.1"
 
-libraryDependencies ++= Seq(
-  "org.bytedeco" % "openblas" % "0.3.21-1.5.8" classifier "linux-x86_64",
-  "org.bytedeco" % "openblas" % "0.3.21-1.5.8"
-)
+//libraryDependencies ++= Seq(
+//  "org.bytedeco" % "openblas" % "0.3.21-1.5.8" classifier "linux-x86_64",
+//  "org.bytedeco" % "openblas" % "0.3.21-1.5.8"
+//)
 
 // Assembly settings to include all dependencies
 assembly / assemblyMergeStrategy := {
