@@ -36,18 +36,11 @@ libraryDependencies += "org.apache.spark" % "spark-mllib_2.12" % "3.5.3"
 
 libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
 
-libraryDependencies ++= Seq(
-  "org.bytedeco" % "openblas" % "0.3.21-1.5.8" classifier "linux-x86_64",
-  "org.bytedeco" % "openblas" % "0.3.21-1.5.8"
-)
-
 // Assembly settings to include all dependencies
 assembly / assemblyMergeStrategy := {
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
   case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
   case PathList("META-INF", xs @ _*) => MergeStrategy.concat
   case PathList("native", xs @ _*) => MergeStrategy.first
-  case PathList("native-libs", xs @ _*) => MergeStrategy.first // Include native libs
-  case PathList("org", "bytedeco", "openblas", xs @ _*) => MergeStrategy.first // Include native OpenBLAS binaries
   case _ => MergeStrategy.first
 }

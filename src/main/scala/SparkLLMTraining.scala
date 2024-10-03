@@ -39,22 +39,6 @@ object SparkLLMTraining {
     // Initialize Spark context
     val sc: JavaSparkContext = createSparkContext
     // Create your LLM model using DL4J
-    val model = LLMModel.createModel(128, 10) // Input size and output size
 
-    // Prepare data (you can use the sliding window data from the previous step)
-    val windows = SlidingWindowExample.createSlidingWindows(new Array[Double](1000), 128, 64, 10)
-    val rddData = createRDDFromData(windows, sc)
-    // Set up the TrainingMaster configuration
-    val trainingMaster = new Nothing(32).batchSizePerWorker(32) // Batch size on each Spark worker.averagingFrequency(5)// Frequency of parameter averaging.workerPrefetchNumBatches(2).build
-    // Create a SparkDl4jMultiLayer with the Spark context and model
-    val sparkModel = new Nothing(sc, model, trainingMaster)
-    // Set listeners to monitor the training progress
-    model.setListeners(new ScoreIterationListener(10))
-    // Train the model on the distributed RDD dataset
-    sparkModel.fit(rddData)
-    // Save the model after training
-    // ModelSerializer.writeModel(sparkModel.getNetwork(), new File("LLM_Spark_Model.zip"), true);
-    // Stop the Spark context after training
-    sc.stop
   }
 }
