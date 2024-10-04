@@ -8,4 +8,4 @@ For testing, the last two test cases will require you to set your own input and 
 
 For running, sbt run will run the default Driver program which takes "operation" "inputfile" "outputfile" args. Operations are "Word2Vec" "CosineSim" and "Tokenization"
 
-Video report: https://www.youtube.com/watch?v=__O1X9f8VuI (Output contains incorrect frequencies, see "output" folder in hw1 branch with updated, accurate output. Since posting video replaced hardcoded word2vec config w a config file, still experimenting with optimal values even now in preparation for hw2)
+Video report: https://www.youtube.com/watch?v=__O1X9f8VuI (Output contains incorrect frequencies, see "output" folder in hw1 branch with updated, accurate output. Since posting video replaced hardcoded word2vec config w a config file, still experimenting with optimal values even now in preparation for hw2) More detailed documentation provided in hw1 branch
