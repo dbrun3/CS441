@@ -1,5 +1,4 @@
 import org.apache.spark.SparkConf
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener
 import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer
 import org.deeplearning4j.spark.impl.paramavg.ParameterAveragingTrainingMaster
@@ -31,11 +30,16 @@ object SparkLLMTraining {
 
 
   def main(args: Array[String]): Unit = {
+
+    // Define the model configuration
+    val vocabSize = 10000  // Example vocabulary size
+    val embeddingDim = 128  // Embedding dimensions
+    val numClasses = 10  // Number of output classes
+
     // Initialize Spark context
     val sc: JavaSparkContext = createSparkContext
 
-    // Create your LLM model using DL4J
-    val model: MultiLayerNetwork = null //TODO: Create a model
+    val model = LLMModel.createModel(vocabSize, embeddingDim, numClasses)
 
     // Prepare data (you can use the sliding window data from the previous step)
     // Example input data (could be sentences, tokens, etc.)
