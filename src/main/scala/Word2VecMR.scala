@@ -18,11 +18,22 @@ import org.deeplearning4j.models.word2vec.{VocabWord, Word2Vec}
 import org.deeplearning4j.models.sequencevectors.sequence
 import org.deeplearning4j.models.sequencevectors.sequence.Sequence
 
-import java.io.{File, IOException, InputStream}
+import java.io.{IOException, InputStream}
 import scala.jdk.CollectionConverters.*
 import org.slf4j.LoggerFactory
 
 import scala.io.Source
+
+
+def getEncodingType(encoding: String): EncodingType = {
+  encoding match {
+    case "cl100k_base" => EncodingType.CL100K_BASE
+    case "r50k_base"   => EncodingType.R50K_BASE
+    case "p50k_base"   => EncodingType.P50K_BASE
+    case "p50k_edit"   => EncodingType.P50K_EDIT
+    case _             => throw new IllegalArgumentException(s"Unknown encoding type: $encoding")
+  }
+}
 
 // Function for splitting encoded arrays by periods
 def splitArrayOnToken(arr: Array[Int], separator: Int): List[Array[Int]] =
@@ -76,39 +87,42 @@ class W2VMapper extends Mapper[LongWritable, Text, Text, Text]:
   private val wordKey = new Text()
   private val arr = new Text()
 
-  private val tokens = new Text()
-  private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
-  private val encoding: Encoding = registry.getEncoding(EncodingType.CL100K_BASE) // Using CL100K_BASE for encoding
-
   @throws[IOException]
   @throws[InterruptedException]
   override def map(key: LongWritable, value: Text, context: Mapper[LongWritable, Text, Text, Text]#Context): Unit =
-    val line = value.toString
-    val encodedTokens: Array[Int] = encoding.encode(line).toArray
 
-    val encodedSentences: List[Array[Int]] = splitArrayOnToken(encodedTokens, 13) //BPE encoding for period
-
-    val sequenceIterator = new TokenizedSequenceIterator(encodedSentences)
-
+    // Get config from context
     val conf: Configuration = context.getConfiguration
     val configFilePath: String = conf.get("word2vecConf")
     if (configFilePath == null) {
       throw new IllegalArgumentException("Config file path is not set in the configuration.")
     }
 
-    // Check if the path contains "s3" and handle accordingly
+    // Check if the path contains "s3" and else get from regular fs
     val fs: FileSystem = if (configFilePath.contains("s3")) {
       FileSystem.get(new java.net.URI(configFilePath), conf)
     } else {
       FileSystem.getLocal(conf)
     }
-
     val inputStream: InputStream = fs.open(new Path(configFilePath))
     val fileContent: String = Source.fromInputStream(inputStream).mkString
     inputStream.close()
 
     // Parse the configuration using ConfigFactory
     val config: Config = ConfigFactory.parseString(fileContent)
+
+    val encodingType: EncodingType = getEncodingType(config.getString("jtokkit.encodingType"))
+
+    val tokens = new Text()
+    val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
+    val encoding: Encoding = registry.getEncoding(encodingType)
+
+    val line = value.toString
+    val encodedTokens: Array[Int] = encoding.encode(line).toArray
+
+    val encodedSentences: List[Array[Int]] = splitArrayOnToken(encodedTokens, 13) //BPE encoding for period
+
+    val sequenceIterator = new TokenizedSequenceIterator(encodedSentences)
 
     val minWordFrequency: Int = config.getInt("word2vec.minWordFrequency")
     val layerSize: Int = config.getInt("word2vec.layerSize")
