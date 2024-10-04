@@ -17,9 +17,10 @@ Imports
     scala.jdk.CollectionConverters._: Converts Java collections into Scala collections.
 
 Helper Functions and Classes
-getEncodingType(encoding: String): EncodingType
 
-    Purpose: Maps a string to an appropriate EncodingType for Byte Pair Encoding.
+getEncodingType(encoding: String): EncodingType
+    
+Purpose: Maps a string to an appropriate EncodingType for Byte Pair Encoding.
     Parameters:
         encoding: String representing the encoding type.
     Returns: Corresponding EncodingType (e.g., CL100K_BASE, R50K_BASE).
@@ -27,7 +28,7 @@ getEncodingType(encoding: String): EncodingType
 
 splitArrayOnToken(arr: Array[Int], separator: Int): List[Array[Int]]
 
-    Purpose: Splits an encoded array on a specific token (e.g., a period represented by a token).
+Purpose: Splits an encoded array on a specific token (e.g., a period represented by a token).
     Parameters:
         arr: Array of encoded integers (tokens).
         separator: Token value to split the array on (e.g., period).
@@ -35,7 +36,7 @@ splitArrayOnToken(arr: Array[Int], separator: Int): List[Array[Int]]
 
 TokenizedSequenceIterator
 
-    Purpose: Custom iterator that processes a sequence of token arrays and converts them into VocabWord sequences for Word2Vec processing.
+Purpose: Custom iterator that processes a sequence of token arrays and converts them into VocabWord sequences for Word2Vec processing.
     Constructor:
         tokensList: A list of token arrays where each array represents a sequence of tokens (e.g., a sentence).
     Implements: SequenceIterator[VocabWord] interface.
@@ -46,9 +47,11 @@ TokenizedSequenceIterator
 
 Mapper Class: W2VMapper
 
-    Purpose: Processes input text data, encodes the text using BPE, splits the encoded text into sentences, and generates word embeddings using Word2Vec.
+Purpose: Processes input text data, encodes the text using BPE, splits the encoded text into sentences, and generates word embeddings using Word2Vec.
+
     Extends: Mapper[LongWritable, Text, Text, Text]
-    Key Functionality:
+
+Key Functionality:
         Configuration: Reads the configuration file (passed via context) to set up parameters for Word2Vec.
         Text Encoding: Encodes input text into tokens using a specified BPE encoding.
         Token Splitting: Splits the encoded text into sentences based on tokenized periods.
@@ -57,16 +60,17 @@ Mapper Class: W2VMapper
 
 Reducer Class: W2VReducer
 
-    Purpose: Aggregates and averages the word vectors (embeddings) emitted by the Mapper, computing the average vector for each token.
+Purpose: Aggregates and averages the word vectors (embeddings) emitted by the Mapper, computing the average vector for each token.
+
     Extends: Reducer[Text, Text, Text, Text]
-    Key Functionality:
+Key Functionality:
         Aggregation: Sums the embedding vectors for each token emitted by the Mapper.
         Averaging: Computes the average embedding vector for each token by dividing the sum by the count.
         Output: Outputs the token along with its average embedding vector.
 
 Driver Object: Word2VecMR
 
-    Purpose: Manages the configuration and execution of the Word2Vec MapReduce job.
+Purpose: Manages the configuration and execution of the Word2Vec MapReduce job.
     Methods:
         run(input: String, output: String, confFilePath: String): Configures the Hadoop MapReduce job and sets up the Mapper and Reducer classes.
     Key Functionality:
@@ -76,27 +80,27 @@ Driver Object: Word2VecMR
 
 Overall Flow
 
-    Text Input: The input text is processed line-by-line in the W2VMapper.
-    Encoding: Each line is encoded into tokens using Byte Pair Encoding (BPE).
-    Sentence Splitting: The encoded tokens are split into sentences using a period as the separator.
-    Word2Vec Training: The token sequences are passed to the Word2Vec model, which generates word embeddings.
-    Mapper Output: The Mapper emits each token and its corresponding word vector.
-    Reducer Aggregation: The Reducer collects word vectors for each token and computes the average vector.
-    Final Output: The final output is a token and its averaged word embedding vector, representing the semantic meaning of the word.
+Text Input: The input text is processed line-by-line in the W2VMapper.
+Encoding: Each line is encoded into tokens using Byte Pair Encoding (BPE).
+Sentence Splitting: The encoded tokens are split into sentences using a period as the separator.
+Word2Vec Training: The token sequences are passed to the Word2Vec model, which generates word embeddings.
+Mapper Output: The Mapper emits each token and its corresponding word vector.
+Reducer Aggregation: The Reducer collects word vectors for each token and computes the average vector.
+Final Output: The final output is a token and its averaged word embedding vector, representing the semantic meaning of the word.
 
 Dependencies
 
-    Hadoop: Provides the MapReduce framework and handles distributed data processing.
-    Deeplearning4j: Used for the Word2Vec implementation.
-    JTokKit: Handles the Byte Pair Encoding (BPE) of text data.
+Hadoop: Provides the MapReduce framework and handles distributed data processing.
+Deeplearning4j: Used for the Word2Vec implementation.
+JTokKit: Handles the Byte Pair Encoding (BPE) of text data.
 
 How to Run
 
-    Ensure that Hadoop is installed and properly configured.
-    Place the input text data in the appropriate Hadoop input path.
-    Run the MapReduce job using the driver object Word2VecMR.
-    Monitor the logs for success or failure of the job.
-    The output will be written to the specified output path in HDFS.
+Ensure that Hadoop is installed and properly configured.
+Place the input text data in the appropriate Hadoop input path.
+Run the MapReduce job using the driver object Word2VecMR.
+Monitor the logs for success or failure of the job.
+The output will be written to the specified output path in HDFS.
     
 ### CosineSim.scala
 
@@ -113,9 +117,10 @@ Imports
 
 Mapper Class: WordEmbeddingMapper
 
-    Purpose: Processes input text, extracting words and their corresponding embedding vectors, and emits them as key-value pairs.
+Purpose: Processes input text, extracting words and their corresponding embedding vectors, and emits them as key-value pairs.
+
     Extends: Mapper[LongWritable, Text, Text, Text]
-    Key Functionality:
+Key Functionality:
         Input Format: Each line of input contains a word and its associated embedding vector in tab-separated format.
         Processing:
             Extracts the word and the embedding vector.
@@ -135,9 +140,10 @@ Example Output:
 
 Reducer Class: CosineSimilarityReducer
 
-    Purpose: Gathers all words and their embeddings emitted by the Mapper and computes the cosine similarity between each word’s embedding and every other word’s embedding to find the closest neighbor.
+Purpose: Gathers all words and their embeddings emitted by the Mapper and computes the cosine similarity between each word’s embedding and every other word’s embedding to find the closest neighbor.
+
     Extends: Reducer[Text, Text, Text, Text]
-    Key Functionality:
+Key Functionality:
         Input: Receives all the words and embeddings as emitted by the Mapper.
         Processing:
             Iterates over the embeddings for each word.
@@ -151,8 +157,7 @@ Cosine Similarity Calculation:
     Formula:
     similarity=∑(ai×bi)∑(ai2)×∑(bi2)
     similarity=∑(ai2​)
-
-​×∑(bi2​)
+    ×∑(bi2​)
 
     ​∑(ai​×bi​)​ where a and b are the embedding vectors of two words.
 
@@ -164,13 +169,13 @@ Example Output:
 Helper Method:
 
     cosineSimilarity(vecA: Array[Double], vecB: Array[Double]): Double:
-        Computes the cosine similarity between two embedding vectors.
+Computes the cosine similarity between two embedding vectors.
         Takes two arrays of doubles (vectors) as input.
         Returns the cosine similarity score.
 
 Driver Object: CosineSimMR
 
-    Purpose: Configures and runs the MapReduce job to compute cosine similarities between word embeddings.
+Purpose: Configures and runs the MapReduce job to compute cosine similarities between word embeddings.
     Methods:
         run(input: String, output: String):
             Configures the Hadoop job, specifying the Mapper, Reducer, input/output formats, and logging levels.
@@ -182,7 +187,7 @@ Driver Object: CosineSimMR
 
 Overall Flow
 
-    Input: Text file where each line contains a word and its embedding vector, e.g., word: This\t1234\t1.0\t[-0.1, 0.2, -0.3].
+Input: Text file where each line contains a word and its embedding vector, e.g., word: This\t1234\t1.0\t[-0.1, 0.2, -0.3].
     Mapper Processing:
         The WordEmbeddingMapper extracts the word and its embedding.
         Emits a key-value pair where the key is "ALL" and the value is the word and its embedding vector.
@@ -193,6 +198,6 @@ Overall Flow
 
 How to Run
 
-    Ensure that Hadoop is properly configured and that the input data is available in the Hadoop Distributed File System (HDFS).
-    Run the CosineSimMR.run(inputPath, outputPath) method, where inputPath is the location of the input file and outputPath is where the output will be written.
-    Monitor the logs for job progress and output once the job is complete.
+Ensure that Hadoop is properly configured and that the input data is available in the Hadoop Distributed File System (HDFS).
+Run the CosineSimMR.run(inputPath, outputPath) method, where inputPath is the location of the input file and outputPath is where the output will be written.
+Monitor the logs for job progress and output once the job is complete.
