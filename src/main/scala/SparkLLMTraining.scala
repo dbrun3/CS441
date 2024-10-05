@@ -8,6 +8,7 @@ import org.deeplearning4j.util.ModelSerializer
 
 import java.io.File
 import java.util
+import scala.jdk.CollectionConverters.seqAsJavaListConverter
 
 object SparkLLMTraining {
 
@@ -46,8 +47,10 @@ object SparkLLMTraining {
     val sentences: Array[String] = Array("The quick brown fox jumps over the lazy dog", "This is another sentence for testing sliding windows")
     val windowSize: Int = 5
 
+    SlidingWindowWithPositionalEmbedding.initEmbeddingMap("/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings")
+
     // Parallelize the input data (convert array to an RDD)
-    val sentenceRDD: JavaRDD[String] = sc.parallelize(util.Arrays.asList(sentences))
+    val sentenceRDD: JavaRDD[String] = sc.parallelize(sentences.toSeq.asJava)
 
     // Apply the sliding window logic to create the dataset
     val slidingWindowDataset: JavaRDD[DataSet] = sentenceRDD.flatMap(sentence => {
@@ -65,16 +68,16 @@ object SparkLLMTraining {
     val sparkModel = new SparkDl4jMultiLayer(sc, model, trainingMaster)
 
     // Set listeners to monitor the training progress
-    model.setListeners(new ScoreIterationListener()(10))
+    //model.setListeners(new ScoreIterationListener()(10))
 
     // Train the model on the distributed RDD dataset
-    sparkModel.fit(slidingWindowDataset)
+    //sparkModel.fit(slidingWindowDataset)
 
     // Save the model after training
-    ModelSerializer.writeModel(sparkModel.getNetwork, new File("LLM_Spark_Model.zip"), true) //TODO: For now use java.io but eventually add s3 switch
+    //ModelSerializer.writeModel(sparkModel.getNetwork, new File("LLM_Spark_Model.zip"), true) //TODO: For now use java.io
 
     // Stop the Spark context after training
-    sc.stop()
+    //sc.stop()
   }
 }
 
