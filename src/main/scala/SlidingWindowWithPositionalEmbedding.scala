@@ -18,9 +18,14 @@ import scala.util.Using
 
 object SlidingWindowWithPositionalEmbedding {
 
-  // Map of token ids to their vector embeddings + vector dimensions
-  private var embeddingMap: Map[Int, Array[Double]] = Map() // vars since we are initializing it during runtime
-  private var embeddingDim: Int = 0
+  // vars since we are initializing these during runtime
+  private var embeddingMap: Map[Int, Array[Double]] = Map()   // Map of token ids to their vector embeddings
+  private var embeddingDim: Int = 0 // Number of dimensions of each embedding
+  private var oov: INDArray = _ // Out of vocabulary embedding generated
+
+  private val encodingType: EncodingType = getEncodingType("r50k_base")
+  private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
+  private val encoding: Encoding = registry.getEncoding(encodingType)
 
   def initEmbeddingMap(directoryPath: String): Unit = {
     val embeddingMapBuilder = mutable.Map[Int, Array[Double]]()
@@ -61,27 +66,36 @@ object SlidingWindowWithPositionalEmbedding {
       // Convert the mutable map to an immutable one
       embeddingMap = embeddingMapBuilder.toMap
 
-      // Set embeddingDim to the length of the first embedding vector
       if (embeddingMap.nonEmpty) {
+        // Set embeddingDim to the length of the first embedding vector
         embeddingDim = embeddingMap.head._2.length
+
+        // Set oov vector to predefined random embedding vector
+        Nd4j.getRandom.setSeed(12345L)
+        oov = Nd4j.rand(1, embeddingDim).castTo(org.nd4j.linalg.api.buffer.DataType.DOUBLE)
       }
     } else {
       println(s"The provided path is not a directory: $directoryPath")
     }
   }
 
+  def getVocabSize: Int = embeddingMap.size
+
+  def getEmbeddingDim: Int = embeddingDim
+
+  def getMap: Map[Int, Array[Double]] = embeddingMap
+
   // Create sliding windows for inputs and targets with positional embeddings
   def createSlidingWindowsWithPositionalEmbedding(tokenString: String, windowSize: Int): util.ArrayList[DataSet] = {
-
-    val encodingType: EncodingType = getEncodingType("r50k_base")
-    val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
-    val encoding: Encoding = registry.getEncoding(encodingType)
 
     val tokens: Array[Int] = encoding.encode(tokenString).toArray
 
     val dataSetList: util.ArrayList[DataSet] = new util.ArrayList[DataSet]()
 
+    println(s"Token sequence length: ${tokens.length}, Window size: $windowSize")
+
     for (i <- 0 to tokens.length - windowSize - 1) {
+
       // Extract the input window (windowSize tokens)
       val inputWindow = new Array[Int](windowSize)
       System.arraycopy(tokens, i, inputWindow, 0, windowSize)
@@ -106,11 +120,12 @@ object SlidingWindowWithPositionalEmbedding {
       // Convert the target token into an embedding
       val targetEmbedding: INDArray = tokenizeAndEmbed(Array(targetToken))
 
+      println(s"Position-aware embedding shape: ${positionAwareEmbedding.shapeInfoToString()}")
+      println(s"Target embedding shape: ${targetEmbedding.shapeInfoToString()}")
+
       // Add to the dataset (input is the window with positional embeddings, target is the next word)
       dataSetList.add(new DataSet(positionAwareEmbedding, targetEmbedding))
     }
-
-
     dataSetList
   }
 
@@ -122,7 +137,7 @@ object SlidingWindowWithPositionalEmbedding {
         case Some(embeddingArray) =>
           Nd4j.create(embeddingArray)
         case None =>
-          Nd4j.rand(1, embeddingDim).castTo(org.nd4j.linalg.api.buffer.DataType.DOUBLE)
+          oov
       }
 
       // Ensure all embeddings are 2D: reshape [100] to [1,100]
@@ -185,7 +200,7 @@ object SlidingWindowWithPositionalEmbedding {
     })
 
     // Collect and print the results (for demonstration)
-    slidingWindowDataset.collect.forEach((window) => {
+    slidingWindowDataset.collect.forEach(window => {
 
       val inputEmbedding = window.getFeatures  // Input: Multiple tokens
       val targetEmbedding = window.getLabels   // Target: Single token
