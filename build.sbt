@@ -31,13 +31,18 @@ libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.4"
 libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "3.3.4"
 libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-jobclient" % "3.3.4"
 
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M2.1"
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M2.1" exclude("net.jpountz.lz4", "lz4")
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-ui" % "1.0.0-M2.1" exclude("net.jpountz.lz4", "lz4")
 libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M2.1"
 libraryDependencies += "org.deeplearning4j" % "dl4j-spark3_2.12" % "1.0.0-M2"
 libraryDependencies += "org.deeplearning4j" % "dl4j-spark-parameterserver_2.12" % "1.0.0-M2.1"
 
-libraryDependencies += "org.apache.spark" % "spark-core_2.12" % "3.5.3"
+libraryDependencies += "org.apache.spark" % "spark-core_2.12" % "3.5.3" exclude("net.jpountz.lz4", "lz4") exclude("io.netty", "netty-all")
 libraryDependencies += "org.apache.spark" % "spark-mllib_2.12" % "3.5.3"
+
+libraryDependencies += "org.lz4" % "lz4-java" % "1.7.1"
+libraryDependencies += "io.vertx" % "vertx-core" % "3.9.13"
+libraryDependencies += "io.vertx" % "vertx-web" % "3.9.13"
 
 
 libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
