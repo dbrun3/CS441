@@ -41,17 +41,21 @@ object SparkLLMTraining {
 
   def main(args: Array[String]): Unit = {
 
-    //TODO replace with args
-    val inputPath: String = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input"
+    if (args.length != 4) {
+      logger.error("SparkLLMTraining usage: <input> <output> <embedding> <config>")
+    }
+
+    // Set corpus input path
+    val inputPath: String = args(0)
 
     // Set output file
-    val modelPath: String = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/LLM_Spark_Model.zip"
-
-    // Set config file
-    val confPath: String = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/application.conf"
+    val modelPath: String = args(1)
 
     // Set embeddings from hw1 path
-    val embeddingPath: String = "/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings"
+    val embeddingPath: String = args(2)
+
+    // Set config file
+    val confPath: String = args(3)
 
     // Initialize Spark context
     val sc: JavaSparkContext = createSparkContext("local[*]") // TODO: CHANGE BEFORE ASSEMBLY
