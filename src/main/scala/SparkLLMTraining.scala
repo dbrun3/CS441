@@ -14,19 +14,14 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 
 import java.io.File
 import java.util
+import scala.collection.convert.ImplicitConversions.`iterable AsScalaIterable`
 
 object SparkLLMTraining {
 
   // Create a logger
   private val logger = LoggerFactory.getLogger(SparkLLMTraining.getClass)
 
-  def createRDDFromStrings(data: util.ArrayList[String], sc: JavaSparkContext): JavaRDD[String] = {
-    // Parallelize your data into a distributed RDD
-    val rddData = sc.parallelize(data)
-    rddData
-  }
-
-  def createRDDFromData(data: util.ArrayList[DataSet], sc: JavaSparkContext): JavaRDD[DataSet] = {
+  private def createRDDFromStrings(data: util.ArrayList[String], sc: JavaSparkContext): JavaRDD[String] = {
     // Parallelize your data into a distributed RDD
     val rddData = sc.parallelize(data)
     rddData
@@ -46,8 +41,7 @@ object SparkLLMTraining {
 
   def main(args: Array[String]): Unit = {
 
-    //TODO get file paths from args and figure out how to adapt to AWS like hw1 (but without hdfs)
-    // Set input directory
+    //TODO replace with args
     val inputPath: String = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input"
 
     // Set output file
@@ -80,21 +74,36 @@ object SparkLLMTraining {
     val numEpochs: Int = config.getInt("model.numEpochs")
 
     // Example input data (could be sentences, tokens, etc.) //TODO: Read sentences (lines) from each file in an input folder
-    val sentence: String = "The Trojans thought this was a sign from the gods, or an omen as they would have said, that they should not believe Laocoon; so they determined to take the horse into the city against his advice. The horse was so big, however, that it would not go through the gates, and in order to get it inside of the walls they had to tear down part of the wall itself. When night fell, the Greek soldiers came out of the horse and opened the gates of the city. The other Greeks, who had been waiting just out of sight, returned and entered through the gates and the hole the Trojans had made in the wall. Troy was easily conquered then, and the city was burned to the ground, and Helen’s husband carried her back to Greece. For reason of this horse trick, we still have a saying, “Beware of the Greeks bearing gifts,” which is as much as to say, “Look out for an enemy who makes you a present.”"
+    // val sentence: String = "The Trojans thought this was a sign from the gods, or an omen as they would have said, that they should not believe Laocoon; so they determined to take the horse into the city against his advice. The horse was so big, however, that it would not go through the gates, and in order to get it inside of the walls they had to tear down part of the wall itself. When night fell, the Greek soldiers came out of the horse and opened the gates of the city. The other Greeks, who had been waiting just out of sight, returned and entered through the gates and the hole the Trojans had made in the wall. Troy was easily conquered then, and the city was burned to the ground, and Helen’s husband carried her back to Greece. For reason of this horse trick, we still have a saying, “Beware of the Greeks bearing gifts,” which is as much as to say, “Look out for an enemy who makes you a present.”"
 
     // Load input from directory using the spark context to access file in case of HDFS
     val sentences: util.ArrayList[String] = FileUtil.getFileContentAsList(sc, inputPath)
 
+    // Create RDD for sentences to parallelize window building
+    val sentencesRDD: JavaRDD[String] = createRDDFromStrings(sentences, sc)
+
+    // Parallelize window creation using mapPartitions to keep the logic distributed
+    val batchedWindowsRDD: JavaRDD[DataSet] = sentencesRDD.mapPartitions(sentenceIter => {
+      val windowsList = new util.ArrayList[DataSet]()
+
+      sentenceIter.forEachRemaining(sentence => {
+        // Create windows and batch them
+        val windows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentence, windowSize)
+        val batchedWindows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.batchSlidingWindows(windows, batchSize)
+
+        // Add all batched windows to the list
+        windowsList.addAll(batchedWindows)
+      })
+
+      // Return an iterator over the batched windows
+      windowsList.iterator()
+    })
+
+    // Log resulting batch sizes
+    batchedWindowsRDD.foreach(batch => logger.info(s"Batch processed with ${batch.size} elements"))
+
     // Initialize model with embedding dimensions from hw1 and set num of neurons
     val model: MultiLayerNetwork = LLMModel.createModel(embeddingDim, hiddenSize)
-
-    // Create windows, batch them and convert to RDD
-    val windows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentences.get(0), windowSize)
-    logger.info(s"Sliding windows created. Total number of windows: ${windows.size()}")
-    val batchedWindows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.batchSlidingWindows(windows, batchSize)
-    logger.info(s"Batched windows created. Total number of batches: ${batchedWindows.size()}")
-    val batchedRDD: JavaRDD[DataSet] = createRDDFromData(batchedWindows, sc)
-    logger.info(s"Batched RDD created. Total partitions in RDD: ${batchedRDD.getNumPartitions}")
 
     // Set up the TrainingMaster configuration
     val trainingMaster: ParameterAveragingTrainingMaster = new ParameterAveragingTrainingMaster.Builder(32)
@@ -122,7 +131,7 @@ object SparkLLMTraining {
     logger.info("Starting training...")
     for (epoch <- 1 to numEpochs) {
       logger.info(s"Epoch $epoch started")
-      sparkModel.fit(batchedRDD) // Train for each epoch
+      sparkModel.fit(batchedWindowsRDD) // Train for each epoch
       val score = sparkModel.getScore
       logger.info(s" Score: $score")
       logger.info(s"Epoch $epoch finished")
