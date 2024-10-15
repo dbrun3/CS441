@@ -2,6 +2,7 @@ import com.knuddels.jtokkit.Encodings
 import com.knuddels.jtokkit.api.EncodingRegistry
 import com.knuddels.jtokkit.api.Encoding
 import com.knuddels.jtokkit.api.EncodingType
+import org.apache.spark.SparkContext
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.dataset.DataSet
@@ -27,70 +28,28 @@ object SlidingWindowWithPositionalEmbedding {
   private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
   private val encoding: Encoding = registry.getEncoding(encodingType)
 
-  def initEmbeddingMap(directoryPath: String, encodeType: String = "default"): Unit = {
-    val embeddingMapBuilder = mutable.Map[Int, Array[Double]]()
+  def initEmbeddingMap(sc: SparkContext, directoryPath: String, encodeType: String = "default"): Unit = {
 
-    // Get all files in the specified directory
-    val dir = new File(directoryPath)
-    if (dir.exists && dir.isDirectory) {
-      val files = dir.listFiles.filter(_.isFile).toList
+    // Convert the mutable map to an immutable one
+    embeddingMap = FileUtil.loadEmbeddings(sc, directoryPath)
 
-      // Iterate over each file in the directory
-      files.foreach { file =>
-        // Use `Using` to safely handle file resource management
-        Using(Source.fromFile(file)) { source =>
-          for (line <- source.getLines()) {
-            // Regex to extract the ID and the embedding vector
-            val pattern = """word:\s+\S+\s+id:\s+(\d+)\s+freq:\s+\d+\s+\[([^\]]+)\]""".r //word: blah id: 123 freq: 123 [1, 2, 3]
+    if (embeddingMap.nonEmpty) {
+      // Set embeddingDim to the length of the first embedding vector
+      embeddingDim = embeddingMap.head._2.length
 
-            line match {
-              case pattern(idString, embeddingString) =>
-                // Parse the ID
-                val id = idString.toInt
-
-                // Parse the embedding string (a comma-separated list of doubles) into an array of Double
-                val embedding = embeddingString.split(",").map(_.trim.toDouble)
-
-                // Add the (id, embedding) pair to the map
-                embeddingMapBuilder(id) = embedding
-
-              case _ => // Ignore lines that don't match the expected pattern
-            }
-          }
-        }.recover {
-          case e: Exception =>
-            logger.error(s"An error occurred while reading the file ${file.getName}: ${e.getMessage}")
-        }
-      }
-
-      logger.info("Embeddings read from file.")
-
-
-      // Convert the mutable map to an immutable one
-      embeddingMap = embeddingMapBuilder.toMap
-
-      if (embeddingMap.nonEmpty) {
-        // Set embeddingDim to the length of the first embedding vector
-        embeddingDim = embeddingMap.head._2.length
-
-        // Set oov vector to predefined random embedding vector
-        Nd4j.getRandom.setSeed(12345L)
-        oov = Nd4j.rand(1, embeddingDim).castTo(org.nd4j.linalg.api.buffer.DataType.DOUBLE)
-      } else {
-        logger.warn("WARNING: Embedding map empty, embeddingDim and OOV not set")
-      }
-
-      if (encodeType != "default") {
-        encodingType = getEncodingType(encodeType)
-        logger.info(s"Encoding type set to ${encodeType}. If invalid, will default to r50k_base")
-      }
-
-      logger.info("Embeddings map created")
-
-
+      // Set oov vector to predefined random embedding vector
+      Nd4j.getRandom.setSeed(12345L)
+      oov = Nd4j.rand(1, embeddingDim).castTo(org.nd4j.linalg.api.buffer.DataType.DOUBLE)
     } else {
-      logger.error(s"The provided path is not a directory: $directoryPath")
+      logger.warn("WARNING: Embedding map empty, embeddingDim and OOV not set")
     }
+
+    if (encodeType != "default") {
+      encodingType = getEncodingType(encodeType)
+      logger.info(s"Encoding type set to ${encodeType}. If invalid, will default to r50k_base")
+    }
+
+    logger.info("Embeddings map created")
   }
 
   def getVocabSize: Int = embeddingMap.size
