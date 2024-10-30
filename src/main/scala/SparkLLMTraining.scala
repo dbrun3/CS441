@@ -4,20 +4,14 @@ import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer
 import org.deeplearning4j.spark.impl.paramavg.ParameterAveragingTrainingMaster
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.nd4j.linalg.dataset.DataSet
-import org.deeplearning4j.util.ModelSerializer
 import org.deeplearning4j.ui.model.stats.StatsListener
 import org.deeplearning4j.ui.api.UIServer
 import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage
 import org.slf4j.LoggerFactory
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
-import org.nd4j.evaluation.classification.Evaluation
-import org.nd4j.linalg.api.ndarray.INDArray
-import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.indexing.NDArrayIndex
-import org.nd4j.linalg.ops.transforms.Transforms
 
-import java.io.File
 import java.util
 import scala.collection.convert.ImplicitConversions.`iterable AsScalaIterable`
 
@@ -48,6 +42,7 @@ object SparkLLMTraining {
 
     if (args.length != 4) {
       logger.error("SparkLLMTraining usage: <input> <output> <embedding> <config>")
+      return
     }
 
     // Set corpus input path

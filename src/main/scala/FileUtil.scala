@@ -32,32 +32,13 @@ object FileUtil {
   def getFileContentAsList(sc: SparkContext, directoryPath: String): util.ArrayList[String] = {
     val linesBuffer = new util.ArrayList[String]()
 
-    if (directoryPath.startsWith("s3://")) {
-      // Use SparkContext textFile to read all files in the directory from S3
-      try {
-        val lines = sc.textFile(directoryPath + "/*").collect()
-        linesBuffer.addAll(lines.toList.asJava)
-      } catch {
-        case e: Exception =>
-          logger.error(s"An error occurred while reading the S3 path: $directoryPath", e)
-      }
-    } else {
-      // For local files, read the directory with standard I/O
-      val dir = new File(directoryPath)
-      if (dir.exists && dir.isDirectory) {
-        val files = dir.listFiles.filter(_.isFile).toList
-
-        files.foreach { file =>
-          Using(Source.fromFile(file)) { source =>
-            source.getLines().forEachRemaining(line => linesBuffer.add(line))
-          }.recover {
-            case e: Exception =>
-              logger.error(s"An error occurred while reading the local file ${file.getName}: ${e.getMessage}")
-          }
-        }
-      } else {
-        logger.error(s"The provided local path is not a directory or does not exist: $directoryPath")
-      }
+    // Use SparkContext textFile to read all files in the directory from S3
+    try {
+      val lines = sc.textFile(directoryPath + "/*").collect()
+      linesBuffer.addAll(lines.toList.asJava)
+    } catch {
+      case e: Exception =>
+        logger.error(s"An error occurred while reading the S3 path: $directoryPath", e)
     }
 
     linesBuffer
@@ -67,41 +48,18 @@ object FileUtil {
 def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, INDArray] = {
     val embeddingMapBuilder = mutable.Map[Int, INDArray]()
 
-    // Check if the path is HDFS or local
-    if (directoryPath.startsWith("s3://")) {
-      // Read all lines across files in the directory (S3 or local)
-      try {
-        // Collect lines from all files in the directory
-        val lines = sc.textFile(directoryPath + "/*").collect()
-        // Process each line as if it were a separate source
-        lines.foreach { line =>
-          // Using Source.fromString to create a Source object from each line
-          parseLineContent(line, embeddingMapBuilder)
-        }
-      } catch {
-        case e: Exception =>
-          logger.error(s"An error occurred while reading files in the directory $directoryPath: ${e.getMessage}")
+    // Read all lines across files in the directory (S3 or local)
+    try {
+      // Collect lines from all files in the directory
+      val lines = sc.textFile(directoryPath + "/*").collect()
+      // Process each line as if it were a separate source
+      lines.foreach { line =>
+        // Using Source.fromString to create a Source object from each line
+        parseLineContent(line, embeddingMapBuilder)
       }
-    } else {
-      // Handle local file system case
-      val dir = new File(directoryPath)
-      if (dir.exists && dir.isDirectory) {
-        val files = dir.listFiles.filter(_.isFile).toList
-
-        files.foreach { file =>
-          Using(Source.fromFile(file)) { source => {
-            for(line <- source.getLines()) {
-              parseLineContent(line, embeddingMapBuilder)
-            }
-          }
-          }.recover {
-            case e: Exception =>
-              logger.error(s"An error occurred while reading the local file ${file.getName}: ${e.getMessage}")
-          }
-        }
-      } else {
-        logger.error(s"The provided local path is not a directory: $directoryPath")
-      }
+    } catch {
+      case e: Exception =>
+        logger.error(s"An error occurred while reading files in the directory $directoryPath: ${e.getMessage}")
     }
 
     embeddingMapBuilder.toMap
@@ -126,17 +84,12 @@ def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, INDArray] 
 
   // Load configuration based on path (either local or S3)
   def loadConfig(sc: SparkContext, confPath: String): Config = {
-    if (confPath.startsWith("s3://")) {
-      // Read from S3 using SparkContext
-      val configData = sc.textFile(confPath).collect().mkString("\n")
-      ConfigFactory.parseString(configData)
-    } else {
-      // Read locally using java.io.File
-      ConfigFactory.parseFile(new File(confPath))
-    }
+    val configData = sc.textFile(confPath).collect().mkString("\n")
+    ConfigFactory.parseString(configData)
   }
 
   // Save model either locally or on S3
+  @throws[IOException]
   def saveModel(sc: SparkContext, modelPath: String, sparkModel: SparkDl4jMultiLayer): Unit = {
     if (modelPath.startsWith("s3://")) {
       // Use Hadoop FileSystem to save the model to S3

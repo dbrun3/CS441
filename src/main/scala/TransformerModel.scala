@@ -62,24 +62,24 @@ object TransformerModel {
     generatedText
   }
 
-
-  @throws[IOException]
-  def main(args: Array[String]): Unit = {
-
-    val sc: JavaSparkContext = createSparkContext("local[*]") // TODO: CHANGE BEFORE ASSEMBLY
-    // Load the pretrained transformer model from file
-    val modelPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/model.zip" // Path to the pretrained model file
-    val embeddingPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings"
-
-    SlidingWindowWithPositionalEmbedding.initEmbeddingMap(sc, embeddingPath)
-
-    println("mapsize: " + SlidingWindowWithPositionalEmbedding.getMap.size)
-
-    val model = FileUtil.loadPretrainedModel(sc, modelPath)
-    // Generate text using the pretrained model
-    val query = "is the most valuable"
-    val generatedSentence = generateSentence(query, model, 5, 5) // Generate a sentence with max 5 words
-
-    System.out.println("Generated Sentence: " + generatedSentence)
-  }
+//
+//  @throws[IOException]
+//  def main(args: Array[String]): Unit = {
+//
+//    val sc: JavaSparkContext = createSparkContext("local[*]") // TODO: CHANGE BEFORE ASSEMBLY
+//    // Load the pretrained transformer model from file
+//    val modelPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/model.zip" // Path to the pretrained model file
+//    val embeddingPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings"
+//
+//    SlidingWindowWithPositionalEmbedding.initEmbeddingMap(sc, embeddingPath)
+//
+//    println("mapsize: " + SlidingWindowWithPositionalEmbedding.getMap.size)
+//
+//    val model = FileUtil.loadPretrainedModel(sc, modelPath)
+//    // Generate text using the pretrained model
+//    val query = "is the most valuable"
+//    val generatedSentence = generateSentence(query, model, 5, 5) // Generate a sentence with max 5 words
+//
+//    System.out.println("Generated Sentence: " + generatedSentence)
+//  }
 }
