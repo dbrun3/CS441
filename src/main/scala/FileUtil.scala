@@ -4,16 +4,13 @@ import org.slf4j.LoggerFactory
 
 import scala.io.Source
 import scala.util.Using
-import java.io.File
-import java.util.ArrayList
+import java.io.{File, FileOutputStream, IOException, InputStream, OutputStream}
 import scala.collection.mutable
 import scala.io.Source
 import scala.util.Using
-import java.io.File
 import java.util
 import scala.collection.convert.ImplicitConversions.`iterator asJava`
 import scala.jdk.CollectionConverters._
-import java.io.{File, FileOutputStream, OutputStream}
 import org.apache.spark.SparkContext
 import com.typesafe.config.{Config, ConfigFactory}
 import org.deeplearning4j.util.ModelSerializer
@@ -22,7 +19,11 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import java.net.URI
 import java.nio.file.{Files, Paths}
 import org.apache.spark.SparkContext
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer
+import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.factory.Nd4j
+import org.nd4j.linalg.ops.transforms.Transforms
 
 object FileUtil {
 
@@ -30,31 +31,18 @@ object FileUtil {
 
   def getFileContentAsList(sc: SparkContext, directoryPath: String): util.ArrayList[String] = {
     val linesBuffer = new util.ArrayList[String]()
-    val hadoopConf = sc.hadoopConfiguration
 
-    // Check if the path is HDFS or local
     if (directoryPath.startsWith("s3://")) {
-      // Handle HDFS case
-      val fs = FileSystem.get(new java.net.URI(directoryPath), hadoopConf)
-      val path = new Path(directoryPath)
-      if (fs.exists(path) && fs.isDirectory(path)) {
-        val fileStatuses = fs.listStatus(path)
-
-        fileStatuses.filter(_.isFile).foreach { fileStatus =>
-          val filePath = fileStatus.getPath
-          // Read each file from HDFS
-          Using(Source.fromInputStream(fs.open(filePath))) { source =>
-            source.getLines().forEachRemaining(line => linesBuffer.add(line))
-          }.recover {
-            case e: Exception =>
-              logger.error(s"An error occurred while reading the HDFS file ${filePath.getName}: ${e.getMessage}")
-          }
-        }
-      } else {
-        logger.error(s"The provided HDFS path is not a directory or does not exist: $directoryPath")
+      // Use SparkContext textFile to read all files in the directory from S3
+      try {
+        val lines = sc.textFile(directoryPath + "/*").collect()
+        linesBuffer.addAll(lines.toList.asJava)
+      } catch {
+        case e: Exception =>
+          logger.error(s"An error occurred while reading the S3 path: $directoryPath", e)
       }
     } else {
-      // Handle local file system case
+      // For local files, read the directory with standard I/O
       val dir = new File(directoryPath)
       if (dir.exists && dir.isDirectory) {
         val files = dir.listFiles.filter(_.isFile).toList
@@ -68,7 +56,7 @@ object FileUtil {
           }
         }
       } else {
-        logger.error(s"The provided local path is not a directory: $directoryPath")
+        logger.error(s"The provided local path is not a directory or does not exist: $directoryPath")
       }
     }
 
@@ -76,30 +64,23 @@ object FileUtil {
   }
 
 
-def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, Array[Double]] = {
-    val embeddingMapBuilder = mutable.Map[Int, Array[Double]]()
-    val hadoopConf = sc.hadoopConfiguration
+def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, INDArray] = {
+    val embeddingMapBuilder = mutable.Map[Int, INDArray]()
 
     // Check if the path is HDFS or local
     if (directoryPath.startsWith("s3://")) {
-      // Handle HDFS case
-      val fs = FileSystem.get(new java.net.URI(directoryPath), hadoopConf)
-      val path = new Path(directoryPath)
-      if (fs.exists(path) && fs.isDirectory(path)) {
-        val fileStatuses = fs.listStatus(path)
-
-        fileStatuses.filter(_.isFile).foreach { fileStatus =>
-          val filePath = fileStatus.getPath
-          // Read each file from HDFS
-          Using(Source.fromInputStream(fs.open(filePath))) { source =>
-            parseFileContent(source, embeddingMapBuilder)
-          }.recover {
-            case e: Exception =>
-              logger.error(s"An error occurred while reading the HDFS file ${filePath.getName}: ${e.getMessage}")
-          }
+      // Read all lines across files in the directory (S3 or local)
+      try {
+        // Collect lines from all files in the directory
+        val lines = sc.textFile(directoryPath + "/*").collect()
+        // Process each line as if it were a separate source
+        lines.foreach { line =>
+          // Using Source.fromString to create a Source object from each line
+          parseLineContent(line, embeddingMapBuilder)
         }
-      } else {
-        logger.error(s"The provided HDFS path is not a directory or does not exist: $directoryPath")
+      } catch {
+        case e: Exception =>
+          logger.error(s"An error occurred while reading files in the directory $directoryPath: ${e.getMessage}")
       }
     } else {
       // Handle local file system case
@@ -108,8 +89,11 @@ def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, Array[Doub
         val files = dir.listFiles.filter(_.isFile).toList
 
         files.foreach { file =>
-          Using(Source.fromFile(file)) { source =>
-            parseFileContent(source, embeddingMapBuilder)
+          Using(Source.fromFile(file)) { source => {
+            for(line <- source.getLines()) {
+              parseLineContent(line, embeddingMapBuilder)
+            }
+          }
           }.recover {
             case e: Exception =>
               logger.error(s"An error occurred while reading the local file ${file.getName}: ${e.getMessage}")
@@ -123,18 +107,20 @@ def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, Array[Doub
     embeddingMapBuilder.toMap
   }
 
-  private def parseFileContent(source: Source, embeddingMapBuilder: mutable.Map[Int, Array[Double]]): Unit = {
+  private def parseLineContent(line: String, embeddingMapBuilder: mutable.Map[Int, INDArray]): Unit = {
     // Regex to extract the ID and the embedding vector
     val pattern = """word:\s+\S+\s+id:\s+(\d+)\s+freq:\s+\d+\s+\[([^\]]+)\]""".r
 
-    for (line <- source.getLines()) {
-      line match {
-        case pattern(idString, embeddingString) =>
-          val id = idString.toInt
-          val embedding = embeddingString.split(",").map(_.trim.toDouble)
-          embeddingMapBuilder(id) = embedding
-        case _ => // Ignore lines that don't match the expected pattern
-      }
+    line match {
+      case pattern(idString, embeddingString) =>
+        val id = idString.toInt
+        val embedding = embeddingString.split(",").map(_.trim.toDouble)
+
+        val embeddingINDArray = Nd4j.create(embedding)          // Convert Array[Double] to INDArray
+        val normalizedINDArray = Transforms.unitVec(embeddingINDArray)  // normalize
+        embeddingMapBuilder(id) = normalizedINDArray
+
+      case _ => // Ignore lines that don't match the expected pattern
     }
   }
 
@@ -164,6 +150,25 @@ def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, Array[Doub
       ModelSerializer.writeModel(sparkModel.getNetwork, new File(modelPath), true)
     }
   }
+
+  // Method to load the pretrained model from either local or S3
+  @throws[IOException]
+  def loadPretrainedModel(sc: SparkContext, modelPath: String): MultiLayerNetwork = {
+    if (modelPath.startsWith("s3://")) {
+      // Use Hadoop FileSystem to load the model from S3
+      val hadoopConf = sc.hadoopConfiguration
+      val fs = FileSystem.get(new URI(modelPath), hadoopConf)
+      val inputStream: InputStream = fs.open(new Path(modelPath))
+      val model = ModelSerializer.restoreMultiLayerNetwork(inputStream)
+      inputStream.close()
+      model
+    } else {
+      // Load locally using java.io.File
+      val file = new File(modelPath)
+      ModelSerializer.restoreMultiLayerNetwork(file)
+    }
+  }
+
 
 
 

@@ -15,8 +15,9 @@
             <option value="$PROJECT_DIR$/utils" />
           </set>
         </option>
-        <option name="sbtVersion" value="1.10.1" />
       </SbtProjectSettings>
     </option>
+    <option name="maximumHeapSize" value="4096" />
+    <option name="vmParameters" value="-Xmx4G -Xms2G -XX:MaxMetaspaceSize=512M" />
   </component>
 </project>

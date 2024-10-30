@@ -11,6 +11,11 @@ import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage
 import org.slf4j.LoggerFactory
 import com.typesafe.config.{Config, ConfigFactory}
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
+import org.nd4j.evaluation.classification.Evaluation
+import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.factory.Nd4j
+import org.nd4j.linalg.indexing.NDArrayIndex
+import org.nd4j.linalg.ops.transforms.Transforms
 
 import java.io.File
 import java.util
@@ -72,13 +77,12 @@ object SparkLLMTraining {
 
     // Model config (using embedding size from loaded file
     val embeddingDim = SlidingWindowWithPositionalEmbedding.getEmbeddingDim // Get embedding dimensions from loaded file
+    val vocabSize = SlidingWindowWithPositionalEmbedding.getVocabSize
     val hiddenSize: Int = config.getInt("model.hiddenSize")
+    val learningRate: Double = config.getDouble("model.learnRate")
     val batchSize: Int = config.getInt("model.batchSize")
     val windowSize: Int = config.getInt("model.windowSize")
     val numEpochs: Int = config.getInt("model.numEpochs")
-
-    // Example input data (could be sentences, tokens, etc.) //TODO: Read sentences (lines) from each file in an input folder
-    // val sentence: String = "The Trojans thought this was a sign from the gods, or an omen as they would have said, that they should not believe Laocoon; so they determined to take the horse into the city against his advice. The horse was so big, however, that it would not go through the gates, and in order to get it inside of the walls they had to tear down part of the wall itself. When night fell, the Greek soldiers came out of the horse and opened the gates of the city. The other Greeks, who had been waiting just out of sight, returned and entered through the gates and the hole the Trojans had made in the wall. Troy was easily conquered then, and the city was burned to the ground, and Helen’s husband carried her back to Greece. For reason of this horse trick, we still have a saying, “Beware of the Greeks bearing gifts,” which is as much as to say, “Look out for an enemy who makes you a present.”"
 
     // Load input from directory using the spark context to access file in case of HDFS
     val sentences: util.ArrayList[String] = FileUtil.getFileContentAsList(sc, inputPath)
@@ -107,7 +111,7 @@ object SparkLLMTraining {
     batchedWindowsRDD.foreach(batch => logger.info(s"Batch processed with ${batch.size} elements"))
 
     // Initialize model with embedding dimensions from hw1 and set num of neurons
-    val model: MultiLayerNetwork = LLMModel.createModel(embeddingDim, hiddenSize)
+    val model: MultiLayerNetwork = LLMModel.createModel(embeddingDim, hiddenSize, vocabSize, learningRate)
 
     // Set up the TrainingMaster configuration
     val trainingMaster: ParameterAveragingTrainingMaster = new ParameterAveragingTrainingMaster.Builder(32)
@@ -140,7 +144,55 @@ object SparkLLMTraining {
       logger.info(s" Score: $score")
       logger.info(s"Epoch $epoch finished")
     }
-    logger.info("Finished training.")
+    val score = sparkModel.getScore
+    logger.info(s"Finished training. Final score $score")
+
+    // TODO Copy to test.scala later...
+    // Extract the first x batches from the RDD
+    val firstXBatches = batchedWindowsRDD.take(5) // 5 test batches
+    var correct = 0.0;
+    var total = 0.0;
+
+    // Iterate over each batch and each sequence within the batch
+    for (batch <- firstXBatches) {
+      val features = batch.getFeatures  // Shape: [batchSize, embeddingDim, sequenceLength]
+      val labels = batch.getLabels      // Shape: [batchSize, vocabSize, sequenceLength]
+
+      // Run the model to get predictions for the features
+      val predictions = model.output(features)  // Predictions shape: [batchSize, vocabSize, sequenceLength]
+
+      for (i <- 0 until batchSize) {
+        // Get the last timestep for this sequence in the batch
+        val labelLastTimestep = labels.get(NDArrayIndex.point(i), NDArrayIndex.all(), NDArrayIndex.point(windowSize - 1))
+        val predictionLastTimestep = predictions.get(NDArrayIndex.point(i), NDArrayIndex.all(), NDArrayIndex.point(windowSize - 1))
+
+        // Find the index of the max value in the label for accuracy checking
+        val labelMaxIndex = labelLastTimestep.argMax().getInt(0)
+
+        // Flatten the predictions for easy sorting and get the top 5 indices and scores
+        val flatPredictions = predictionLastTimestep.toDoubleVector
+        val top5IndicesWithScores = flatPredictions.zipWithIndex
+          .sortBy(-_._1)  // Sort by probability in descending order
+          .take(5)        // Take the top 5
+        val top5Indices = top5IndicesWithScores.map(_._2)
+        val top5Scores = top5IndicesWithScores.map(_._1)
+
+        // Check if the highest prediction matches the label
+        val predictionMaxIndex = top5Indices.head
+        if (labelMaxIndex == predictionMaxIndex) correct += 1
+        total += 1
+
+        // Display the top 5 predictions with translations
+        println(s"Sequence $i - Label max index: $labelMaxIndex, Top 5 Prediction indices: ${top5Indices.mkString(", ")}")
+        println(s"Sequence $i - Label (translated): ${SlidingWindowWithPositionalEmbedding.translateIndex(labelMaxIndex)}")
+        top5Indices.zip(top5Scores).foreach { case (index, score) =>
+          println(s"Prediction index: $index (translated: ${SlidingWindowWithPositionalEmbedding.translateIndex(index)}), Score: $score")
+        }
+      }
+    }
+
+
+    logger.info(f"Tests complete. Accuracy: ${(correct/total) * 100}%%")
 
     // Save the model after training
     FileUtil.saveModel(sc, modelPath, sparkModel)

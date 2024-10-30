@@ -1,32 +1,33 @@
-import org.deeplearning4j.nn.conf.{NeuralNetConfiguration, RNNFormat}
+import org.deeplearning4j.nn.conf.{MultiLayerConfiguration, NeuralNetConfiguration, RNNFormat}
 import org.deeplearning4j.nn.conf.inputs.InputType
 import org.deeplearning4j.nn.conf.layers.{LSTM, RnnOutputLayer}
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
+import org.deeplearning4j.nn.weights.WeightInit
 import org.nd4j.linalg.activations.Activation
+import org.nd4j.linalg.learning.config.Adam
 import org.nd4j.linalg.lossfunctions.LossFunctions
+import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction
 
 object LLMModel {
-  def createModel(embeddingDim: Int, hiddenSize: Int): MultiLayerNetwork = {
+  def createModel(embeddingDim: Int, hiddenSize: Int, vocabSize: Int, learnRate: Double): MultiLayerNetwork = {
 
-    // Define the model configuration
-    val conf = new NeuralNetConfiguration.Builder()
-      .seed(42)  // Random seed for reproducibility
+    // Define the updated model configuration for overfitting
+    val conf: MultiLayerConfiguration = new NeuralNetConfiguration.Builder()
+      .weightInit(WeightInit.XAVIER)
+      .updater(new Adam(learnRate)) // Use a small learning rate
+      .l2(0.0) // Minimize any additional regularization effects
       .list()
-
-      .layer(new LSTM.Builder()
-        .nIn(embeddingDim)  // Input size is the embedding dimension (100)
-        .nOut(hiddenSize)  // Number of units in the LSTM layer
+      .layer(0, new LSTM.Builder()
+        .nIn(embeddingDim)
+        .nOut(hiddenSize)
         .activation(Activation.TANH)
+        .dropOut(0.1) // Add dropout with a low rate to avoid excessive information loss
         .build())
-
-      // Output layer for predicting the next word (the output embedding dimension)
-      .layer(new RnnOutputLayer.Builder(LossFunctions.LossFunction.MSE)  // MSE because you're predicting embeddings
-        .activation(Activation.IDENTITY)  // Linear output for regression
-        .nIn(hiddenSize)  // Input to this layer comes from LSTM hidden units
-        .nOut(embeddingDim)  // Output is...
+      .layer(1, new RnnOutputLayer.Builder(LossFunction.MCXENT)
+        .activation(Activation.SOFTMAX)
+        .nIn(hiddenSize)
+        .nOut(vocabSize)
         .build())
-
-      .setInputType(InputType.recurrent(embeddingDim))
       .build()
 
     // Initialize the model

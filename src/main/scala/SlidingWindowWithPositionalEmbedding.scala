@@ -1,17 +1,19 @@
 import com.knuddels.jtokkit.Encodings
-import com.knuddels.jtokkit.api.EncodingRegistry
-import com.knuddels.jtokkit.api.Encoding
-import com.knuddels.jtokkit.api.EncodingType
+import com.knuddels.jtokkit.api.{Encoding, EncodingRegistry, EncodingType, IntArrayList}
 import org.apache.spark.SparkContext
+import org.nd4j.linalg.api.buffer.DataType
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.dataset.DataSet
+import org.nd4j.linalg.indexing.NDArrayIndex
+import org.nd4j.linalg.ops.transforms.Transforms
 import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util
 import scala.io.Source
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.asScalaBufferConverter
 import scala.util.Using
 
 object SlidingWindowWithPositionalEmbedding {
@@ -20,13 +22,14 @@ object SlidingWindowWithPositionalEmbedding {
 
 
   // vars since we are initializing these during runtime
-  private var embeddingMap: Map[Int, Array[Double]] = Map()   // Map of token ids to their vector embeddings
+  private var embeddingMap: Map[Int, INDArray] = Map()   // Map of token ids to their vector embeddings
   private var embeddingDim: Int = 0 // Number of dimensions of each embedding
   private var oov: INDArray = _ // Out of vocabulary embedding generated
 
   private var encodingType: EncodingType = getEncodingType("r50k_base")
   private val registry: EncodingRegistry = Encodings.newDefaultEncodingRegistry()
   private val encoding: Encoding = registry.getEncoding(encodingType)
+  private var vocabSize: Int = 50256
 
   def initEmbeddingMap(sc: SparkContext, directoryPath: String, encodeType: String = "default"): Unit = {
 
@@ -35,63 +38,58 @@ object SlidingWindowWithPositionalEmbedding {
 
     if (embeddingMap.nonEmpty) {
       // Set embeddingDim to the length of the first embedding vector
-      embeddingDim = embeddingMap.head._2.length
+      embeddingDim = embeddingMap.head._2.length.toInt
 
       // Set oov vector to predefined random embedding vector
       Nd4j.getRandom.setSeed(12345L)
-      oov = Nd4j.rand(1, embeddingDim).castTo(org.nd4j.linalg.api.buffer.DataType.DOUBLE)
+      oov = Transforms.unitVec(Nd4j.rand(DataType.DOUBLE, 1, embeddingDim))
     } else {
       logger.warn("WARNING: Embedding map empty, embeddingDim and OOV not set")
     }
 
     if (encodeType != "default") {
       encodingType = getEncodingType(encodeType)
+      if (encodingType == EncodingType.CL100K_BASE) {
+        vocabSize = 100000
+      }
       logger.info(s"Encoding type set to ${encodeType}. If invalid, will default to r50k_base")
     }
 
     logger.info("Embeddings map created")
   }
 
-  def getVocabSize: Int = embeddingMap.size
+  def getVocabSize: Int = vocabSize
 
   def getEmbeddingDim: Int = embeddingDim
 
-  def getMap: Map[Int, Array[Double]] = embeddingMap
+  def getMap: Map[Int, INDArray] = embeddingMap
 
   // Create sliding windows for inputs and targets with positional embeddings
   def createSlidingWindowsWithPositionalEmbedding(tokenString: String, windowSize: Int): util.ArrayList[DataSet] = {
 
-    val tokens: Array[Int] = encoding.encode(tokenString).toArray
+    val tokens: Array[Int] = encodeTokens(tokenString)
     val dataSetList: util.ArrayList[DataSet] = new util.ArrayList[DataSet]()
 
-    for (i <- 0 until tokens.length - windowSize) {
+    for (i <- 0 until tokens.length - (windowSize)) {
 
       // Extract the input window (windowSize tokens)
       val inputWindow = new Array[Int](windowSize)
       System.arraycopy(tokens, i, inputWindow, 0, windowSize)
 
-      // Extract the target token (the token right after the window)
-      val targetToken = tokens(i + windowSize)
+      // Convert input tokens into normalized, positional embeddings for the features
+      val features: INDArray = tokenizeAndEmbed(inputWindow)
 
-      // Convert input tokens into embeddings
-      val inputEmbeddings: INDArray = tokenizeAndEmbed(inputWindow)
+      // Initialize the one-hot encoded target vector with shape [1, vocabSize, sequenceLength]
+      val label = Nd4j.zeros(1, vocabSize, windowSize) // Shape: [minibatch, vocabSize, sequenceLength]
 
-      // Compute positional embeddings
-      val positionalEmbeddings: INDArray = computePositionalEmbedding(windowSize)
-
-      // Ensure neither inputEmbeddings nor positionalEmbeddings are empty before performing the addition
-      if (inputEmbeddings.isEmpty || positionalEmbeddings.isEmpty) {
-        throw new IllegalStateException("Cannot perform operation add on empty arrays.")
+      // Set the target index for each timestep
+      val targetIndex = tokens(i + windowSize)  // Assuming this is the token index for the target
+      for (t <- 0 until windowSize) {
+        if(targetIndex > vocabSize) throw new IndexOutOfBoundsException("yo mama: " + targetIndex + " " + vocabSize)
+        label.putScalar(Array(0, targetIndex, t), 1.0) // Apply the same target across all timesteps
       }
 
-      // Add positional embeddings to the word embeddings
-      val positionAwareEmbedding: INDArray = inputEmbeddings.add(positionalEmbeddings)
-
-      // Convert the target token into an embedding
-      val targetEmbedding: INDArray = tokenizeAndEmbed(Array(targetToken))
-
-      // Add to the dataset (input is the window with positional embeddings, target is the next word)
-      dataSetList.add(new DataSet(positionAwareEmbedding, targetEmbedding))
+      dataSetList.add(new DataSet(features, label))
     }
     dataSetList
   }
@@ -109,46 +107,48 @@ object SlidingWindowWithPositionalEmbedding {
 
       val batchDataSet = DataSet.merge(batch)
 
-      // Reshape the data to [batchSize, embeddingDim, windowSize] -> [n, f, t]
-      val windowSize: Int = (batchDataSet.getFeatures.shape()(0) / batchSize).toInt // Get the window size out of there without having to input it (im so smart)
-      val features = batchDataSet.getFeatures.reshape(batchSize, embeddingDim, windowSize)
+      // Check the shape of merged features to confirm initial arrangement
+      val originalShape = batchDataSet.getFeatures.shape()
 
-      val labels = batchDataSet.getLabels.reshape(batchSize, embeddingDim, 1)
-      val paddedLabels = padLabelsWithZeros(labels, batchSize, embeddingDim, windowSize)
+      // Calculate windowSize based on original shape and batch size
+      val windowSize: Int = (originalShape(0) / batchSize).toInt
 
-      // Update the dataset with the reshaped features and labels
+      // Reshape and transpose to ensure embeddings are columns
+      // Step 1: Reshape to [windowSize, batchSize, embeddingDim]
+      // Step 2: Permute dimensions to [batchSize, embeddingDim, windowSize]
+      val features = batchDataSet.getFeatures.reshape(windowSize, batchSize, embeddingDim).permute(1, 2, 0)
+
+      // Reshape labels as needed
+      val labels = batchDataSet.getLabels.reshape(batchSize, vocabSize, windowSize)
+
+      if(i == 0) {
+        println("feature pre reshape: " + batchDataSet.getFeatures)
+      }
+
+      // Update the dataset with reshaped features and labels
       batchDataSet.setFeatures(features)
-      batchDataSet.setLabels(paddedLabels)
+      batchDataSet.setLabels(labels)
 
       batchedData.add(batchDataSet)
     }
+
 
     // Any remaining data is ignored (dropped) since we don't process short batches.
 
     batchedData // Return the batched data
   }
 
-  private def padLabelsWithZeros(labels: INDArray, batchSize: Int, embeddingDim: Int, sequenceLength: Int): INDArray = {
-    // Create a new label array filled with zeros: [batchSize, outputSize, sequenceLength]
-    val paddedLabels = Nd4j.zeros(batchSize, embeddingDim, sequenceLength)
-
-    // Assign the actual label values to the first time step (the last dimension)
-    for (i <- 0 until batchSize) {
-      for (j <- 0 until embeddingDim) {
-        // Cast the indices to Long to resolve the ambiguity in getDouble
-        paddedLabels.putScalar(Array(i, j, 0), labels.getDouble(i.toLong, j.toLong))
-      }
-    }
-    paddedLabels
+  def encodeTokens(sentence: String): Array[Int] = {
+      encoding.encode(sentence).toArray
   }
 
-  private def tokenizeAndEmbed(tokens: Array[Int]): INDArray = {
+  def tokenizeAndEmbed(tokens: Array[Int]): INDArray = {
 
     // Fetch embeddings for each token
     val embeddings = tokens.map { tokenId =>
       val embedding = embeddingMap.get(tokenId) match {
         case Some(embeddingArray) =>
-          Nd4j.create(embeddingArray)
+          embeddingArray
         case None =>
           oov
       }
@@ -164,12 +164,40 @@ object SlidingWindowWithPositionalEmbedding {
     // Stack all embeddings into a single INDArray
     if (embeddings.isEmpty)
       throw new IllegalStateException("Embeddings could not be created for token string")
-    else
-      Nd4j.vstack(embeddings: _*)  // Stack embeddings vertically to create a matrix [num_tokens x embeddingDim]
+
+    val stackedEmbeddings = Nd4j.vstack(embeddings: _*)  // Stack embeddings vertically to create a matrix [num_tokens x embeddingDim]
+
+    // Compute positional embeddings
+    val positionalEmbeddings: INDArray = computePositionalEmbedding(tokens.length)
+
+    // Add positional embeddings to the word embeddings
+    val positionAwareEmbedding: INDArray = stackedEmbeddings.add(positionalEmbeddings)
+
+    // Create an empty INDArray to store the normalized embeddings
+    val normalizedPositionAwareEmbedding = Nd4j.create(tokens.length, embeddingDim)
+
+    // Normalize each row independently
+    for (i <- 0 until tokens.length) {
+      val rowVector = positionAwareEmbedding.getRow(i)  // Get the row as an INDArray
+      val normalizedRow = Transforms.unitVec(rowVector) // Normalize the row to unit length
+      normalizedPositionAwareEmbedding.putRow(i, normalizedRow) // Insert back into the result matrix
+    }
+
+    normalizedPositionAwareEmbedding
   }
 
+
+  def translateIndex(index: Int): String = {
+    val i: IntArrayList = new IntArrayList()
+    i.add(index)
+    encoding.decode(i)
+  }
+
+
+
+
   // Compute sinusoidal positional embeddings for a given window size
-  private def computePositionalEmbedding(windowSize: Int) = {
+  def computePositionalEmbedding(windowSize: Int): INDArray = {
 
     val positionalEncoding = Nd4j.zeros(windowSize, embeddingDim)
     for (pos <- 0 until windowSize) {
@@ -194,42 +222,5 @@ object SlidingWindowWithPositionalEmbedding {
       case _             => EncodingType.R50K_BASE
     }
   }
-
-//  def main(args: Array[String]): Unit = {
-//    val conf = new SparkConf().setAppName("Sliding Window Dataset").setMaster("local[*]")
-//    val sc = new JavaSparkContext(conf)
-//    initEmbeddingMap("/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings")
-//
-//    // Example input data (could be sentences, tokens, etc.)
-//    val sentences: Array[String] = Array("The brave man or the brave woman is one who looks life in the eye", "The pyramids therefore were tombs of the kings who built them while they were alive to be monuments to themselves when they were dead.")
-//    val windowSize: Int = 5
-//
-//    // Parallelize the input data (convert array to an RDD)
-//    val sentenceRDD: JavaRDD[String] = sc.parallelize(sentences.toSeq.asJava)
-//
-//    // Apply the sliding window logic to create the dataset
-//    val slidingWindowDataset: JavaRDD[DataSet] = sentenceRDD.flatMap(sentence => {
-//      createSlidingWindowsWithPositionalEmbedding(sentence, windowSize).iterator
-//    })
-//
-//    // Collect and print the results (for demonstration)
-//    slidingWindowDataset.collect.forEach(window => {
-//
-//      val inputEmbedding = window.getFeatures  // Input: Multiple tokens
-//      val targetEmbedding = window.getLabels   // Target: Single token
-//
-//      // Print the shapes to confirm dimensions
-//      System.out.println("Input shape: " + inputEmbedding.shapeInfoToString())  // Expect something like [4, 128]
-//      System.out.println("Target shape: " + targetEmbedding.shapeInfoToString())  // Expect something like [1, 128]
-//
-//      // Optionally, print a subset or the full embedding
-//      System.out.println("Input (first token's embedding): " + inputEmbedding.getRow(0).toString())
-//      System.out.println("Target embedding: " + targetEmbedding.toString())
-//
-//    })
-//
-//    // Stop the Spark context
-//    sc.stop()
-//  }
 }
 

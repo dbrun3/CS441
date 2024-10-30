@@ -5,13 +5,12 @@ ThisBuild / scalaVersion := "2.12.18"
 lazy val root = (project in file("."))
   .settings(
     name := "Exercises441",
-      assembly / mainClass := Some("Driver")
+      assembly / mainClass := Some("SparkLLMTraining")
   )
 
 lazy val utils = (project in file("utils"))
   .settings(
-    assembly / assemblyJarName := "Driver.jar",
-    // more settings here ...
+    assembly / assemblyJarName := "Exercises441-assembly.jar"    // more settings here ...
   )
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
