@@ -19,6 +19,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import java.net.URI
 import java.nio.file.{Files, Paths}
 import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaRDD
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer
 import org.nd4j.linalg.api.ndarray.INDArray
@@ -29,40 +30,37 @@ object FileUtil {
 
   private val logger = LoggerFactory.getLogger(SparkLLMTraining.getClass)
 
-  def getFileContentAsList(sc: SparkContext, directoryPath: String): util.ArrayList[String] = {
-    val linesBuffer = new util.ArrayList[String]()
+  def getFileContentAsList(sc: SparkContext, directoryPath: String): JavaRDD[String] = {
 
     // Use SparkContext textFile to read all files in the directory from S3
     try {
-      val lines = sc.textFile(directoryPath + "/*").collect()
-      linesBuffer.addAll(lines.toList.asJava)
+      sc.textFile(directoryPath + "/*")
     } catch {
       case e: Exception =>
         logger.error(s"An error occurred while reading the S3 path: $directoryPath", e)
+        sc.emptyRDD[String]
     }
-
-    linesBuffer
   }
 
 
-def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, INDArray] = {
-    val embeddingMapBuilder = mutable.Map[Int, INDArray]()
+  def loadEmbeddings(sc: SparkContext, directoryPath: String): Map[Int, INDArray] = {
 
-    // Read all lines across files in the directory (S3 or local)
-    try {
-      // Collect lines from all files in the directory
-      val lines = sc.textFile(directoryPath + "/*").collect()
-      // Process each line as if it were a separate source
-      lines.foreach { line =>
-        // Using Source.fromString to create a Source object from each line
-        parseLineContent(line, embeddingMapBuilder)
+    // Read all lines across files in the directory
+    val lines = sc.textFile(directoryPath + "/*")
+
+    // Process each partition in a distributed manner
+    val embeddingPairs = lines.mapPartitions { partition =>
+      val partitionMap = mutable.Map[Int, INDArray]()
+
+      partition.foreach { line =>
+        parseLineContent(line, partitionMap) // Populate partition-specific map
       }
-    } catch {
-      case e: Exception =>
-        logger.error(s"An error occurred while reading files in the directory $directoryPath: ${e.getMessage}")
+
+      partitionMap.iterator // Return an iterator of (key, value) pairs
     }
 
-    embeddingMapBuilder.toMap
+    // Reduce to combine all pairs into a single map
+    embeddingPairs.collectAsMap().toMap
   }
 
   private def parseLineContent(line: String, embeddingMapBuilder: mutable.Map[Int, INDArray]): Unit = {

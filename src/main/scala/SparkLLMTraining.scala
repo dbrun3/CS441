@@ -9,11 +9,12 @@ import org.deeplearning4j.ui.api.UIServer
 import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+import org.apache.spark.rdd.RDD
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.indexing.NDArrayIndex
 
 import java.util
-import scala.collection.convert.ImplicitConversions.`iterable AsScalaIterable`
+import scala.collection.convert.ImplicitConversions.{`iterable AsScalaIterable`, `iterator asJava`}
 
 object SparkLLMTraining {
 
@@ -79,31 +80,16 @@ object SparkLLMTraining {
     val windowSize: Int = config.getInt("model.windowSize")
     val numEpochs: Int = config.getInt("model.numEpochs")
 
-    // Load input from directory using the spark context to access file in case of HDFS
-    val sentences: util.ArrayList[String] = FileUtil.getFileContentAsList(sc, inputPath)
-
     // Create RDD for sentences to parallelize window building
-    val sentencesRDD: JavaRDD[String] = createRDDFromStrings(sentences, sc)
+    val sentencesRDD: RDD[String] = FileUtil.getFileContentAsList(sc, inputPath)
 
-    // Parallelize window creation using mapPartitions to keep the logic distributed
-    val batchedWindowsRDD: JavaRDD[DataSet] = sentencesRDD.mapPartitions(sentenceIter => {
-      val windowsList = new util.ArrayList[DataSet]()
+    // Create sliding windows for each sentence in `sentencesRDD`, keeping everything distributed
+    val slidingWindowsRDD: RDD[DataSet] = sentencesRDD.flatMap(sentence =>
+      SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentence, windowSize)
+    )
 
-      sentenceIter.forEachRemaining(sentence => {
-        // Create windows and batch them
-        val windows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentence, windowSize)
-        val batchedWindows: util.ArrayList[DataSet] = SlidingWindowWithPositionalEmbedding.batchSlidingWindows(windows, batchSize)
-
-        // Add all batched windows to the list
-        windowsList.addAll(batchedWindows)
-      })
-
-      // Return an iterator over the batched windows
-      windowsList.iterator()
-    })
-
-    // Log resulting batch sizes
-    batchedWindowsRDD.foreach(batch => logger.info(s"Batch processed with ${batch.size} elements"))
+    // Batch the sliding windows according to batchSize
+    val batchedWindowsRDD: RDD[DataSet] = SlidingWindowWithPositionalEmbedding.batchSlidingWindows(slidingWindowsRDD, batchSize)
 
     // Initialize model with embedding dimensions from hw1 and set num of neurons
     val model: MultiLayerNetwork = LLMModel.createModel(embeddingDim, hiddenSize, vocabSize, learningRate)
@@ -144,7 +130,7 @@ object SparkLLMTraining {
 
     // TODO Copy to test.scala later...
     // Extract the first x batches from the RDD
-    val firstXBatches = batchedWindowsRDD.take(5) // 5 test batches
+    val firstXBatches = batchedWindowsRDD.take(5) // Take 5 test batches
     var correct = 0.0;
     var total = 0.0;
 
@@ -191,6 +177,9 @@ object SparkLLMTraining {
 
     // Save the model after training
     FileUtil.saveModel(sc, modelPath, sparkModel)
+
+    // Clear broadcasts
+    SlidingWindowWithPositionalEmbedding.clearBroadcasts()
 
     // Stop the Spark context after training
     sc.stop()
