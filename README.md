@@ -20,4 +20,4 @@ For running, sbt run will run the default SparkLLMTrain program which takes "inp
 There is also a TransformerModel program with the main method commented out. This program simply attempts to generate a sentence using the model like in the sample code, and
 does not require any arguments. If the output looks terrible, don't blame the program, the model just sucks.
 
-Video report:
+Video report: https://youtu.be/ss_7mzfHIJc
