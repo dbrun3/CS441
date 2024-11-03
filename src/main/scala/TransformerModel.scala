@@ -29,13 +29,16 @@ object TransformerModel {
     // Tokenize context and convert to embedding (tokenization + embedding is done as part of homework 1)
     val reshapedContextEmbedding: INDArray = contextEmbedding.reshape(1, contextEmbedding.columns(), contextEmbedding.rows())  // [1, embedding_dim, window_size]
     val rawOutput: INDArray = model.output(reshapedContextEmbedding)  // [1, embedding_dim, window_size]
+
+
+
     val output = rawOutput.get(NDArrayIndex.point(0), NDArrayIndex.all(), NDArrayIndex.point(4 - 1))
     val index = output.argMax().getInt(0)
     index
   }
 
   // Method to generate a full sentence based on the seed text
-  def generateSentence(seedText: String, model: MultiLayerNetwork, maxWords: Int, windowSize: Int): String = {
+  def generateSentence(seedText: String, model: MultiLayerNetwork, maxWords: Int, windowSize: Int, map: Map[Int, INDArray]): String = {
     var generatedText: String = seedText
     var finished = false
     var i = 0
@@ -46,7 +49,7 @@ object TransformerModel {
     while (i < maxWords && !finished) {
 
       val tokenWindow: Array[Int] = getLastWindowWithPadding(contextTokenized, windowSize)
-      val contextEmbeddings: INDArray = SlidingWindowWithPositionalEmbedding.tokenizeAndEmbed(tokenWindow)
+      val contextEmbeddings: INDArray = SlidingWindowWithPositionalEmbedding.tokenizeAndEmbed(tokenWindow, map, 100)
       val index: Int = generateNextWord(contextEmbeddings, model)
 
       contextTokenized = (contextTokenized :+ index).takeRight(windowSize)
@@ -62,24 +65,27 @@ object TransformerModel {
     generatedText
   }
 
-//
-//  @throws[IOException]
-//  def main(args: Array[String]): Unit = {
-//
-//    val sc: JavaSparkContext = createSparkContext("local[*]") // TODO: CHANGE BEFORE ASSEMBLY
-//    // Load the pretrained transformer model from file
-//    val modelPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/model.zip" // Path to the pretrained model file
-//    val embeddingPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings"
-//
-//    SlidingWindowWithPositionalEmbedding.initEmbeddingMap(sc, embeddingPath)
-//
-//    println("mapsize: " + SlidingWindowWithPositionalEmbedding.getMap.size)
-//
-//    val model = FileUtil.loadPretrainedModel(sc, modelPath)
-//    // Generate text using the pretrained model
-//    val query = "is the most valuable"
-//    val generatedSentence = generateSentence(query, model, 5, 5) // Generate a sentence with max 5 words
-//
-//    System.out.println("Generated Sentence: " + generatedSentence)
-//  }
+
+  @throws[IOException]
+  def main(args: Array[String]): Unit = {
+
+    val sc: JavaSparkContext = createSparkContext("local[*]") // TODO: CHANGE BEFORE ASSEMBLY
+    // Load the pretrained transformer model from file
+    val modelPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/LLM_Spark_Model.zip" // Path to the pretrained model file
+    val embeddingPath = "/home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings"
+
+    SlidingWindowWithPositionalEmbedding.initEmbeddingMap(sc, embeddingPath)
+    val map = SlidingWindowWithPositionalEmbedding.getEmbeddingMap
+    val windowSize = 5
+
+    println("mapsize: " + map.size)
+
+    val model = FileUtil.loadPretrainedModel(sc, modelPath)
+    // Generate text using the pretrained model
+    val query = "The real stars in the sky"
+    val minWords = 3
+    val generatedSentence = generateSentence(query, model, minWords, windowSize, map) // Generate a sentence with max 5 words
+
+    System.out.println("Generated Sentence: " + generatedSentence)
+  }
 }

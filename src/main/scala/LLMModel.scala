@@ -15,15 +15,18 @@ object LLMModel {
     val conf: MultiLayerConfiguration = new NeuralNetConfiguration.Builder()
       .weightInit(WeightInit.XAVIER)
       .updater(new Adam(learnRate)) // Use a small learning rate
-      .l2(0.0) // Minimize any additional regularization effects
       .list()
       .layer(0, new LSTM.Builder()
         .nIn(embeddingDim)
         .nOut(hiddenSize)
         .activation(Activation.TANH)
-        .dropOut(0.1) // Add dropout with a low rate to avoid excessive information loss
         .build())
-      .layer(1, new RnnOutputLayer.Builder(LossFunction.MCXENT)
+      .layer(1, new LSTM.Builder()
+        .nIn(hiddenSize)
+        .nOut(hiddenSize)
+        .activation(Activation.TANH)
+        .build())
+      .layer(2, new RnnOutputLayer.Builder(LossFunction.MCXENT)
         .activation(Activation.SOFTMAX)
         .nIn(hiddenSize)
         .nOut(vocabSize)

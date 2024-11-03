@@ -4,17 +4,14 @@ import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer
 import org.deeplearning4j.spark.impl.paramavg.ParameterAveragingTrainingMaster
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.nd4j.linalg.dataset.DataSet
-import org.deeplearning4j.ui.model.stats.StatsListener
-import org.deeplearning4j.ui.api.UIServer
-import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
 import org.apache.spark.rdd.RDD
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.indexing.NDArrayIndex
 
+import java.time.Instant
 import java.util
-import scala.collection.convert.ImplicitConversions.{`iterable AsScalaIterable`, `iterator asJava`}
 
 object SparkLLMTraining {
 
@@ -71,6 +68,10 @@ object SparkLLMTraining {
     // Load embeddings and init embedding map using the spark context to access file in case of HDFS
     SlidingWindowWithPositionalEmbedding.initEmbeddingMap(sc, embeddingPath)
 
+    // Embedding map to reference later
+    val embeddingMap = SlidingWindowWithPositionalEmbedding.getEmbeddingMap
+    val embeddingMapBroadcast = sc.broadcast(embeddingMap)
+
     // Model config (using embedding size from loaded file
     val embeddingDim = SlidingWindowWithPositionalEmbedding.getEmbeddingDim // Get embedding dimensions from loaded file
     val vocabSize = SlidingWindowWithPositionalEmbedding.getVocabSize
@@ -83,13 +84,28 @@ object SparkLLMTraining {
     // Create RDD for sentences to parallelize window building
     val sentencesRDD: RDD[String] = FileUtil.getFileContentAsList(sc, inputPath)
 
-    // Create sliding windows for each sentence in `sentencesRDD`, keeping everything distributed
-    val slidingWindowsRDD: RDD[DataSet] = sentencesRDD.flatMap(sentence =>
-      SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentence, windowSize)
-    )
+    val totalSentences = sentencesRDD.count()
+    println(s"$totalSentences sentences loaded. Starting sentence processing...")
+    logger.info(s"$totalSentences sentences loaded. Starting sentence processing...")
 
-    // Batch the sliding windows according to batchSize
-    val batchedWindowsRDD: RDD[DataSet] = SlidingWindowWithPositionalEmbedding.batchSlidingWindows(slidingWindowsRDD, batchSize)
+    // Create sliding windows for each sentence in `sentencesRDD`, keeping everything distributed
+    val slidingWindowsRDD: RDD[DataSet] = sentencesRDD.flatMap(sentence => {
+      SlidingWindowWithPositionalEmbedding.createSlidingWindowsWithPositionalEmbedding(sentence, windowSize, vocabSize, embeddingDim, embeddingMapBroadcast)
+    }).cache()
+
+
+    val totalWindows = slidingWindowsRDD.count()
+    println(s"$totalWindows windows created. Starting window batching...")
+    logger.info(s"$totalWindows windows created. Starting window batching...")
+
+    // Create batches windows distributed by partition
+    val batchedWindowsRDD: RDD[DataSet] = slidingWindowsRDD.mapPartitions { iter =>
+      SlidingWindowWithPositionalEmbedding.batchSlidingWindows(iter, batchSize, embeddingDim, vocabSize)
+    }.cache()
+
+    val batches = batchedWindowsRDD.count()
+    logger.info(s"Number of batches created: $batches")
+    println(s"Number of batches created: $batches")
 
     // Initialize model with embedding dimensions from hw1 and set num of neurons
     val model: MultiLayerNetwork = LLMModel.createModel(embeddingDim, hiddenSize, vocabSize, learningRate)
@@ -104,32 +120,40 @@ object SparkLLMTraining {
     // Create a SparkDl4jMultiLayer with the Spark context and model
     val sparkModel: SparkDl4jMultiLayer = new SparkDl4jMultiLayer(sc, model, trainingMaster)
 
-    // Set up the UI server
-    val uiServer = UIServer.getInstance()
-
-    // Create FileStatsStorage instance to store training stats
-    val statsStorage = new InMemoryStatsStorage()
-
-    // Attach the StatsStorage instance to the UI server
-    uiServer.attach(statsStorage)
-
     // Set up listeners to collect stats during training
-    model.setListeners(new StatsListener(statsStorage), new ScoreIterationListener(10))
+    model.setListeners(new ScoreIterationListener(10))
 
     // Train the model on the distributed RDD dataset
     logger.info("Starting training...")
+    println("Starting training...")
     for (epoch <- 1 to numEpochs) {
+      // Record the start time of the epoch
+      val epochStartTime = Instant.now()
+
       logger.info(s"Epoch $epoch started")
-      sparkModel.fit(batchedWindowsRDD) // Train for each epoch
+      println(s"Epoch $epoch started")
+
+      // Train for each epoch
+      sparkModel.fit(batchedWindowsRDD)
+
       val score = sparkModel.getScore
       logger.info(s" Score: $score")
-      logger.info(s"Epoch $epoch finished")
-    }
-    val score = sparkModel.getScore
-    logger.info(s"Finished training. Final score $score")
+      println(s" Score: $score")
 
-    // TODO Copy to test.scala later...
-    // Extract the first x batches from the RDD
+      // Record the end time and calculate the duration
+      val epochEndTime = Instant.now()
+      val epochDuration = java.time.Duration.between(epochStartTime, epochEndTime).toSeconds
+
+      logger.info(s"Epoch $epoch finished in $epochDuration seconds")
+      println(s"Epoch $epoch finished in $epochDuration seconds")
+    }
+    logger.info(s"Finished training.")
+
+    // Save the model after training
+    FileUtil.saveModel(sc, modelPath, sparkModel)
+    logger.info(s"Model saved.")
+
+    // Test on a test batch
     val firstXBatches = batchedWindowsRDD.take(5) // Take 5 test batches
     var correct = 0.0;
     var total = 0.0;
@@ -174,12 +198,6 @@ object SparkLLMTraining {
 
 
     logger.info(f"Tests complete. Accuracy: ${(correct/total) * 100}%%")
-
-    // Save the model after training
-    FileUtil.saveModel(sc, modelPath, sparkModel)
-
-    // Clear broadcasts
-    SlidingWindowWithPositionalEmbedding.clearBroadcasts()
 
     // Stop the Spark context after training
     sc.stop()
