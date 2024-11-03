@@ -17,4 +17,7 @@ For testing, the some test cases will require you to set your own filepaths in t
 
 For running, sbt run will run the default SparkLLMTrain program which takes "input_path" "embedding_path" "model_output_file" "config_file" args.
 
+There is also a TransformerModel program with the main method commented out. This program simply attempts to generate a sentence using the model like in the sample code, and
+does not require any arguments. If the output looks terrible, don't blame the program, the model just sucks.
+
 Video report:
