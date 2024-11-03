@@ -13,7 +13,7 @@ Video report: https://www.youtube.com/watch?v=__O1X9f8VuI (Output contains incor
 ### HW2
 HW2 is in the 'hw2' branch. To try it yourself, clone the repository and open in in Intellij. Set your sbt shell to jre version 8/11. Scala version 2.12.18 (aready specified in build.sbt)
 
-For testing, the last two test cases will require you to set your own input and output directories in the case itself.
+For testing, the some test cases will require you to set your own filepaths in the case itself.
 
 For running, sbt run will run the default SparkLLMTrain program which takes "input_path" "embedding_path" "model_output_file" "config_file" args.
 
