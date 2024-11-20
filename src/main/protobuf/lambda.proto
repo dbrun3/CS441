@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+// The gRPC service definition
+service BedrockLambdaService {
+  rpc InvokeBedrockLambda (InputMessage) returns (OutputMessage);
+}
+
+// Request message
+message InputMessage {
+  string input = 1;
+}
+
+// Response message
+message OutputMessage {
+  string output = 1;
+}

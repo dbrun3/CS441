@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ScalaCompilerConfiguration">
-    <profile name="sbt 1" modules="Exercises441,Exercises441.utils,cs441_fall2024_4040" />
+    <profile name="sbt 1" modules="AkkaServer,BedrockLambdaClient,Exercises441,Exercises441.utils,cs441_fall2024_4040" />
   </component>
 </project>

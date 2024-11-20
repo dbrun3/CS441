@@ -1,56 +1,68 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "2.12.18"
+ThisBuild / scalaVersion := "2.13.15"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "Exercises441",
-      assembly / mainClass := Some("SparkLLMTraining")
+    name := "AkkaServer" ,
+    assembly / assemblyJarName := "AkkaServer.jar",
   )
 
-lazy val utils = (project in file("utils"))
-  .settings(
-    assembly / assemblyJarName := "Exercises441-assembly.jar"    // more settings here ...
-  )
+resolvers += "Akka library repository".at("https://repo.akka.io/maven")
+enablePlugins(AkkaGrpcPlugin)
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
-libraryDependencies += "com.typesafe" % "config" % "1.4.3"
 
-// Add Logback Classic and SLF4J dependencies
+// Serialization
+libraryDependencies += "com.fasterxml.jackson.module" % "jackson-module-scala_2.11" % "2.5.2"
+
+// Akka
+val akkaVersion = "2.10.0"
+val akkaHttpVersion = sys.props.getOrElse("akka-http.version", "10.7.0")
 libraryDependencies ++= Seq(
-  "ch.qos.logback" % "logback-classic" % "1.2.11", // Logback Classic
-  "org.slf4j" % "slf4j-api" % "1.7.36"             // SLF4J API
+  "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+  "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
+  "com.typesafe.akka" %% "akka-http"                % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-spray-json"     % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-actor-typed"         % akkaVersion,
+  "com.typesafe.akka" %% "akka-stream"              % akkaVersion,
 )
 
-libraryDependencies += "com.knuddels" % "jtokkit" % "1.1.0" // Adjust version as needed
+val grpcVersion = "1.62.2" // Ensure this is consistent
+libraryDependencies ++= Seq(
+  "io.grpc" % "grpc-netty" % grpcVersion,
+  "io.grpc" % "grpc-core" % grpcVersion,
+  "io.grpc" % "grpc-stub" % grpcVersion,
+  "io.grpc" % "grpc-protobuf" % grpcVersion,
+  "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
+  "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % "2.5.0"
+)
 
-// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common
-libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.4"
-// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-mapreduce-client-core
-libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "3.3.4"
-libraryDependencies += "org.apache.hadoop" % "hadoop-mapreduce-client-jobclient" % "3.3.4"
+dependencyOverrides ++= Seq(
+  "io.grpc" % "grpc-netty" % grpcVersion,
+  "io.grpc" % "grpc-core" % grpcVersion,
+  "io.grpc" % "grpc-stub" % grpcVersion,
+  "io.grpc" % "grpc-protobuf" % grpcVersion,
+  "io.grpc" % "grpc-util" % grpcVersion
+)
 
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M2.1" exclude("net.jpountz.lz4", "lz4")
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-ui" % "1.0.0-M2.1" exclude("net.jpountz.lz4", "lz4")
-libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M2.1"
-libraryDependencies += "org.deeplearning4j" % "dl4j-spark3_2.12" % "1.0.0-M2"
-libraryDependencies += "org.deeplearning4j" % "dl4j-spark-parameterserver_2.12" % "1.0.0-M2.1"
+// gRPC
+Compile / PB.targets := Seq(
+  scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+)
+Compile / akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Scala)
+Compile / akkaGrpcGeneratedSources := Seq(AkkaGrpc.Client, AkkaGrpc.Server)
 
-libraryDependencies += "org.apache.spark" % "spark-core_2.12" % "3.5.3" exclude("net.jpountz.lz4", "lz4") exclude("io.netty", "netty-all")
-libraryDependencies += "org.apache.spark" % "spark-mllib_2.12" % "3.5.3"
+// Logging, tests, config
+libraryDependencies ++= Seq(
+  "ch.qos.logback" % "logback-classic" % "1.2.11", // Logback Classic
+  "org.slf4j" % "slf4j-api" % "1.7.36", // SLF4J API
+  "com.typesafe" % "config" % "1.4.3",
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test
+)
 
-libraryDependencies += "org.lz4" % "lz4-java" % "1.7.1"
-libraryDependencies += "io.vertx" % "vertx-core" % "3.9.13"
-libraryDependencies += "io.vertx" % "vertx-web" % "3.9.13"
-
-
-libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
-
-// Assembly settings to include all dependencies
-assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
-  case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
-  case PathList("META-INF", xs @ _*) => MergeStrategy.concat
-  case PathList("native", xs @ _*) => MergeStrategy.first
-  case _ => MergeStrategy.first
+assemblyMergeStrategy in assembly := {
+  {
+    case PathList("META-INF", xs@_*) => MergeStrategy.discard
+    case x => MergeStrategy.first
+  }
 }
