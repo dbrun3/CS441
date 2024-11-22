@@ -4,16 +4,17 @@ ThisBuild / scalaVersion := "2.13.15"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "AkkaServer" ,
+    name := "AkkaServer",
     assembly / assemblyJarName := "AkkaServer.jar",
   )
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 enablePlugins(AkkaGrpcPlugin)
 
+libraryDependencies += "org.scalaj" %% "scalaj-http" % "2.4.2"
 
 // Serialization
-libraryDependencies += "com.fasterxml.jackson.module" % "jackson-module-scala_2.11" % "2.5.2"
+libraryDependencies += "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.18.1"
 
 // Akka
 val akkaVersion = "2.10.0"
@@ -52,17 +53,19 @@ Compile / PB.targets := Seq(
 Compile / akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Scala)
 Compile / akkaGrpcGeneratedSources := Seq(AkkaGrpc.Client, AkkaGrpc.Server)
 
-// Logging, tests, config
+// Logging, tests
 libraryDependencies ++= Seq(
-  "ch.qos.logback" % "logback-classic" % "1.2.11", // Logback Classic
-  "org.slf4j" % "slf4j-api" % "1.7.36", // SLF4J API
-  "com.typesafe" % "config" % "1.4.3",
-  "org.scalatest" %% "scalatest" % "3.2.19" % Test
+  "ch.qos.logback" % "logback-classic" % "1.4.11", // Logback Classic for SLF4J 2.x
+  "org.slf4j" % "slf4j-api" % "2.0.9",            // SLF4J API 2.x
+  "com.typesafe" % "config" % "1.4.3",            // Configuration library
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test, // For tests
+  "com.typesafe.akka" %% "akka-slf4j" % "2.8.6"   // Akka's SLF4J integration
 )
 
+
 assemblyMergeStrategy in assembly := {
-  {
-    case PathList("META-INF", xs@_*) => MergeStrategy.discard
-    case x => MergeStrategy.first
-  }
+  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
+  case PathList("META-INF", _ @ _*)             => MergeStrategy.discard
+  case "reference.conf"                         => MergeStrategy.concat
+  case x                                        => MergeStrategy.first
 }

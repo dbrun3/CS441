@@ -20,13 +20,14 @@ object JsonFormats extends DefaultJsonProtocol {
 }
 
 object AkkaServer {
-  def main(args: Array[String]): Unit = {
+  def run(args: Array[String]): Unit = {
+
     implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "AkkaHttpServer")
     implicit val materializer = SystemMaterializer(system).materializer
     implicit val executionContext: ExecutionContext = system.executionContext
 
     // Create the gRPC client
-    val grpcClient = new BedrockLambdaGrpcClient("localhost", 50051)
+    val grpcClient = new BedrockLambdaGrpcClient(args(0))
 
     // Define the route
     val route =
@@ -45,15 +46,14 @@ object AkkaServer {
       }
 
     // Start the server
-    val bindingFuture = Http().newServerAt("localhost", 8080).bind(route)
+    val bindingFuture = Http().newServerAt("0.0.0.0", 8080).bind(route)
 
-    println("Server online at http://localhost:8080/\nPress RETURN to stop...")
+    println("Server online at http://0.0.0.0:8080/\nPress RETURN to stop...")
     StdIn.readLine() // Let it run until user presses return
 
     bindingFuture
       .flatMap(_.unbind())
       .onComplete(_ => {
-        grpcClient.shutdown() // Ensure the gRPC client shuts down cleanly
         system.terminate()
       })
   }
