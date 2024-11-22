@@ -8,8 +8,6 @@ import java.io.File
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.bufferAsJavaListConverter
 
-// /home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/input /home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/model/LLM_Spark_Model.zip /home/dbrun3/Desktop/441/CS441_Fall2024/output/embeddings /home/dbrun3/Desktop/441/CS441_Fall2024/src/main/resources/application.conf
-
 class HW2Test extends AnyFlatSpec with Matchers {
 
   "computePositionalEmbedding" should "return an INDArray with the correct shape and values" in {
