@@ -1,7 +1,7 @@
 object Main {
   def main(args: Array[String]): Unit = {
     if (args.isEmpty) {
-      println("Please specify which server to run: main or test")
+      println("Please specify which server to run: main or grpc")
       sys.exit(1)
     }
 
@@ -10,11 +10,11 @@ object Main {
         println("Starting Main Akka Server...")
 
         if(args.tail.length != 1) {
-          println("Main server args <url>")
+          println("Main server args <lambda url> (or for testing with the grpc server just 'test')")
         } else {
           AkkaServer.run(args.tail)
         }
-      case "test" =>
+      case "grpc" =>
         println("Starting gRPC Test Server...")
         BedrockLambdaTestServer.run(args.tail)
       case _ =>

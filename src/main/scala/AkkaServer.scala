@@ -6,6 +6,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.stream.SystemMaterializer
+import com.typesafe.config.ConfigFactory
 import spray.json._
 
 import scala.concurrent.ExecutionContext
@@ -20,7 +21,13 @@ object JsonFormats extends DefaultJsonProtocol {
 }
 
 object AkkaServer {
+
+  private val config = ConfigFactory.load()
+  private val port = config.getInt("server.port")
+
   def run(args: Array[String]): Unit = {
+
+    val testingContext = args(0) == "test"
 
     implicit val system: ActorSystem[Nothing] = ActorSystem(Behaviors.empty, "AkkaHttpServer")
     implicit val materializer = SystemMaterializer(system).materializer
@@ -35,7 +42,7 @@ object AkkaServer {
         post {
           entity(as[ChatInput]) { chatInput =>
             // Call the gRPC client's `send` method
-            onComplete(grpcClient.send(chatInput.input)) {
+            onComplete(if(!testingContext) grpcClient.send(chatInput.input) else grpcClient.sendTestGRPC(chatInput.input)) {
               case Success(response) =>
                 complete(HttpEntity(ContentTypes.`application/json`, s"""{"response": "$response"}"""))
               case Failure(exception) =>
@@ -46,9 +53,9 @@ object AkkaServer {
       }
 
     // Start the server
-    val bindingFuture = Http().newServerAt("0.0.0.0", 8080).bind(route)
+    val bindingFuture = Http().newServerAt("0.0.0.0", port).bind(route)
 
-    println("Server online at http://0.0.0.0:8080/\nPress RETURN to stop...")
+    println(s"Server online at http://0.0.0.0:$port/\nPress RETURN to stop...")
     StdIn.readLine() // Let it run until user presses return
 
     bindingFuture

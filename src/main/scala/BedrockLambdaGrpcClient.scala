@@ -1,8 +1,10 @@
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.typesafe.config.ConfigFactory
+import io.grpc.netty.NettyChannelBuilder
 
 import scala.concurrent.{ExecutionContext, Future}
-import lambda.{InputMessage, OutputMessage}
+import lambda.{BedrockLambdaServiceGrpc, InputMessage, OutputMessage}
 import scalaj.http._
 
 import java.util.Base64
@@ -11,6 +13,10 @@ case class LambdaInput(input: String)
 case class LambdaOutput(output: String)
 
 class BedrockLambdaGrpcClient(url: String)(implicit ec: ExecutionContext) {
+
+  private val config = ConfigFactory.load()
+  private val testPort = config.getInt("server.testPort")
+  private val testHost = config.getString("server.testServer")
 
   private val objectMapper = new ObjectMapper()
   objectMapper.registerModule(DefaultScalaModule)
@@ -48,6 +54,24 @@ class BedrockLambdaGrpcClient(url: String)(implicit ec: ExecutionContext) {
         throw new RuntimeException(s"Failed to send request: ${response.code}, ${response.body}")
       }
     }
+  }
+
+  private val channel = NettyChannelBuilder
+    .forAddress(testHost, testPort) // Connect to the specified host and port
+    .usePlaintext() // Use plaintext (no TLS) for simplicity
+    .build()
+
+  // Create the gRPC client stub
+  private val stub = BedrockLambdaServiceGrpc.stub(channel)
+
+  // Function to send a message to the gRPC test server
+  def sendTestGRPC(message: String): Future[String] = {
+    val request = InputMessage(message) // Build the request
+    stub.invokeBedrockLambda(request).map(_.output) // Send the request and map the response
+  }
+  // Shutdown the client
+  def shutdown(): Unit = {
+    channel.shutdown()
   }
 
 }
