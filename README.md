@@ -21,3 +21,13 @@ There is also a TransformerModel program with the main method commented out. Thi
 does not require any arguments. If the output looks terrible, don't blame the program, the model just sucks.
 
 Video report: https://youtu.be/ss_7mzfHIJc
+
+### HW3
+HW3 main server implementation is in the 'hw3' branch. To try it yourself, clone the repository and open in in Intellij. Set your sbt shell to jre version 11.
+You can test to make sure the configurations are properly set with `sbt test`.
+
+Run the server with `sbt run <server, main or test> <url (lambda endpoint)>`. More details in the branch's README.
+
+The lambda handler code can be found in this repository: https://github.com/dbrun3/BedrockLambdaHandler
+
+Video report: https://youtu.be/yZJUen-e6ME
