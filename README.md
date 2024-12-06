@@ -1,4 +1,4 @@
-# CS441 - Dylan Brunelle
+# Distrubuted Cloud Computing for AI - Fall Semester 2024 
 
 ### HW1
 HW1 is in the 'hw1' branch. To try it yourself, clone the repository and open in in Intellij. Set your sbt shell to jre version 8/11.
